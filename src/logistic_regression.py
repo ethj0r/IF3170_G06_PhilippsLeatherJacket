@@ -1,0 +1,159 @@
+"""Binary Logistic Regression using Maximum Likelihood Estimation and SGA."""
+
+import numpy as np
+
+
+class LogisticRegression:
+    """Binary Logistic Regression classifier trained with Stochastic Gradient Ascent."""
+
+    def __init__(
+        self,
+        learning_rate: float = 0.01,
+        max_iter: int = 100,
+        threshold: float = 0.5,
+        shuffle: bool = True,
+        tol: float | None = 1e-6,
+        random_state: int | None = None,
+        verbose: bool = False,
+    ):
+        """Initialize model hyperparameters and training state."""
+        self.learning_rate = learning_rate
+        self.max_iter = max_iter
+        self.threshold = threshold
+        self.shuffle = shuffle
+        self.tol = tol
+        self.random_state = random_state
+        self.verbose = verbose
+
+        self.b_: np.ndarray | None = None
+        self.classes_: np.ndarray | None = None
+        self.lcl_history_: list[float] = []
+        self.loss_history_: list[float] = []
+        self.n_iter_: int = 0
+
+    def _validate_hyperparameters(self) -> None:
+        """Validate initialization hyperparameters before training."""
+        if self.learning_rate <= 0:
+            raise ValueError("learning_rate must be > 0")
+        if self.max_iter < 1:
+            raise ValueError("max_iter must be >= 1")
+        if not (0.0 < self.threshold < 1.0):
+            raise ValueError("threshold must be in (0, 1)")
+
+    @staticmethod
+    def _sigmoid(z: np.ndarray | float) -> np.ndarray | float:
+        """Compute numerically stable sigmoid activation 1 / (1 + exp(-z))."""
+        z_clipped = np.clip(z, -500.0, 500.0)
+        return 1.0 / (1.0 + np.exp(-z_clipped))
+
+    @staticmethod
+    def _add_intercept(X: np.ndarray) -> np.ndarray:
+        """Prepend bias column x_0 = 1 to feature matrix X."""
+        ones = np.ones((X.shape[0], 1), dtype=np.float64)
+        return np.hstack((ones, X))
+
+    @property
+    def intercept_(self) -> float | None:
+        """Return fitted bias weight b_0."""
+        if self.b_ is None:
+            return None
+        return float(self.b_[0])
+
+    @property
+    def coef_(self) -> np.ndarray | None:
+        """Return fitted feature weights (b_1, ..., b_d)."""
+        if self.b_ is None:
+            return None
+        return self.b_[1:].copy()
+
+    def log_odds(self, X: np.ndarray) -> np.ndarray:
+        """Compute linear combination (log-odds) b^T x."""
+        if self.b_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+        X_arr = np.asarray(X, dtype=np.float64)
+        if X_arr.ndim == 1:
+            X_arr = X_arr.reshape(1, -1)
+        X_bias = self._add_intercept(X_arr)
+        return X_bias @ self.b_
+
+    def _compute_lcl(self, X_bias: np.ndarray, y: np.ndarray) -> float:
+        """Compute Log Joint Conditional Likelihood (LCL) on the dataset."""
+        eps = 1e-15
+        p = self._sigmoid(X_bias @ self.b_)
+        p_clipped = np.clip(p, eps, 1.0 - eps)
+        lcl = np.sum(y * np.log(p_clipped) + (1.0 - y) * np.log(1.0 - p_clipped))
+        return float(lcl)
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "LogisticRegression":
+        """Fit binary Logistic Regression model using Stochastic Gradient Ascent."""
+        self._validate_hyperparameters()
+
+        # ===== Input Validation =====
+        X_arr = np.asarray(X, dtype=np.float64)
+        y_arr = np.asarray(y).ravel()
+
+        if X_arr.ndim != 2:
+            raise ValueError("X must be 2-dimensional")
+        if X_arr.shape[0] != y_arr.shape[0]:
+            raise ValueError("X and y must have the same number of samples")
+
+        self.classes_ = np.unique(y_arr)
+        if len(self.classes_) != 2:
+            raise ValueError(f"Expected 2 classes, got {len(self.classes_)}")
+
+        y_bin = (y_arr == self.classes_[1]).astype(np.float64)
+        X_bias = self._add_intercept(X_arr)
+        n_samples, n_params = X_bias.shape
+
+        # ===== Initialization =====
+        self.b_ = np.zeros(n_params, dtype=np.float64)
+        self.lcl_history_ = []
+        self.loss_history_ = []
+        rng = np.random.default_rng(self.random_state)
+
+        # ===== SGA Training Loop =====
+        for epoch in range(1, self.max_iter + 1):
+            indices = rng.permutation(n_samples) if self.shuffle else np.arange(n_samples)
+
+            for idx in indices:
+                x_i = X_bias[idx]
+                y_i = y_bin[idx]
+
+                p_i = self._sigmoid(np.dot(self.b_, x_i))
+                error_i = y_i - p_i
+                self.b_ += self.learning_rate * error_i * x_i
+
+            # ===== Epoch Metrics & Convergence Check =====
+            current_lcl = self._compute_lcl(X_bias, y_bin)
+            current_loss = -current_lcl / n_samples
+            self.lcl_history_.append(current_lcl)
+            self.loss_history_.append(current_loss)
+            self.n_iter_ = epoch
+
+            if self.verbose and (epoch == 1 or epoch % 10 == 0 or epoch == self.max_iter):
+                print(
+                    f"[Epoch {epoch:4d}/{self.max_iter}] "
+                    f"LCL: {current_lcl:.4f} | Loss: {current_loss:.6f}"
+                )
+
+            if self.tol is not None and len(self.loss_history_) >= 2:
+                if abs(self.loss_history_[-2] - self.loss_history_[-1]) < self.tol:
+                    if self.verbose:
+                        print(f"Converged at epoch {epoch}")
+                    break
+
+        return self
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Return probability estimates for [class 0, class 1]."""
+        z = self.log_odds(X)
+        p_pos = np.asarray(self._sigmoid(z), dtype=np.float64)
+        return np.column_stack((1.0 - p_pos, p_pos))
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Predict class labels using the configured decision threshold."""
+        if self.classes_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+        p_pos = self.predict_proba(X)[:, 1]
+        pred_indices = (p_pos >= self.threshold).astype(int)
+        return self.classes_[pred_indices]
