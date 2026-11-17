@@ -10,6 +10,9 @@ class LogisticRegression:
         self,
         learning_rate: float = 0.01,
         max_iter: int = 100,
+        penalty: str | None = None,
+        reg_lambda: float = 0.01,
+        l1_ratio: float = 0.5,
         threshold: float = 0.5,
         shuffle: bool = True,
         tol: float | None = 1e-6,
@@ -19,6 +22,9 @@ class LogisticRegression:
         """Initialize model hyperparameters and training state."""
         self.learning_rate = learning_rate
         self.max_iter = max_iter
+        self.penalty = penalty.lower() if isinstance(penalty, str) else penalty
+        self.reg_lambda = reg_lambda
+        self.l1_ratio = l1_ratio
         self.threshold = threshold
         self.shuffle = shuffle
         self.tol = tol
@@ -37,6 +43,12 @@ class LogisticRegression:
             raise ValueError("learning_rate must be > 0")
         if self.max_iter < 1:
             raise ValueError("max_iter must be >= 1")
+        if self.penalty not in (None, "none", "l1", "l2", "elasticnet"):
+            raise ValueError("penalty must be None, 'none', 'l1', 'l2', or 'elasticnet'")
+        if self.reg_lambda < 0:
+            raise ValueError("reg_lambda must be >= 0")
+        if not (0.0 <= self.l1_ratio <= 1.0):
+            raise ValueError("l1_ratio must be in [0, 1]")
         if not (0.0 < self.threshold < 1.0):
             raise ValueError("threshold must be in (0, 1)")
 
@@ -84,6 +96,33 @@ class LogisticRegression:
         lcl = np.sum(y * np.log(p_clipped) + (1.0 - y) * np.log(1.0 - p_clipped))
         return float(lcl)
 
+    def _compute_penalty(self) -> float:
+        """Compute regularization penalty term on feature weights (excluding bias)."""
+        if self.penalty in (None, "none") or self.reg_lambda == 0.0:
+            return 0.0
+        w = self.b_[1:]
+        if self.penalty == "l1":
+            return float(self.reg_lambda * np.sum(np.abs(w)))
+        if self.penalty == "l2":
+            return float(0.5 * self.reg_lambda * np.sum(w ** 2))
+        # elasticnet
+        l1_term = self.l1_ratio * np.sum(np.abs(w))
+        l2_term = 0.5 * (1.0 - self.l1_ratio) * np.sum(w ** 2)
+        return float(self.reg_lambda * (l1_term + l2_term))
+
+    def _regularization_grad(self) -> np.ndarray:
+        """Compute gradient of the regularization penalty with respect to feature weights."""
+        w = self.b_[1:]
+        if self.penalty == "l1":
+            return self.reg_lambda * np.sign(w)
+        if self.penalty == "l2":
+            return self.reg_lambda * w
+        if self.penalty == "elasticnet":
+            l1_grad = self.l1_ratio * np.sign(w)
+            l2_grad = (1.0 - self.l1_ratio) * w
+            return self.reg_lambda * (l1_grad + l2_grad)
+        return np.zeros_like(w)
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> "LogisticRegression":
         """Fit binary Logistic Regression model using Stochastic Gradient Ascent."""
         self._validate_hyperparameters()
@@ -110,6 +149,7 @@ class LogisticRegression:
         self.lcl_history_ = []
         self.loss_history_ = []
         rng = np.random.default_rng(self.random_state)
+        use_reg = self.penalty not in (None, "none") and self.reg_lambda > 0.0
 
         # ===== SGA Training Loop =====
         for epoch in range(1, self.max_iter + 1):
@@ -123,9 +163,12 @@ class LogisticRegression:
                 error_i = y_i - p_i
                 self.b_ += self.learning_rate * error_i * x_i
 
+                if use_reg:
+                    self.b_[1:] -= self.learning_rate * self._regularization_grad()
+
             # ===== Epoch Metrics & Convergence Check =====
             current_lcl = self._compute_lcl(X_bias, y_bin)
-            current_loss = -current_lcl / n_samples
+            current_loss = (-current_lcl / n_samples) + self._compute_penalty()
             self.lcl_history_.append(current_lcl)
             self.loss_history_.append(current_loss)
             self.n_iter_ = epoch
