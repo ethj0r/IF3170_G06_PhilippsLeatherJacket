@@ -4,12 +4,21 @@ import numpy as np
 
 
 class C45DecisionTree:
-    def __init__(self, categorical_features=None, *, max_depth=None):
+    def __init__(
+        self, categorical_features=None, *, max_depth=None, min_branch_weight=0
+    ):
         if max_depth is not None and (
             not isinstance(max_depth, Integral) or max_depth < 0
         ):
             raise ValueError("max_depth must be a nonnegative integer or None.")
+        if (
+            not isinstance(min_branch_weight, Real)
+            or not np.isfinite(min_branch_weight)
+            or min_branch_weight < 0
+        ):
+            raise ValueError("min_branch_weight must be a finite nonnegative number.")
         self.max_depth = max_depth
+        self.min_branch_weight = min_branch_weight
         self.categorical_features = None
         if categorical_features is not None:
             self.categorical_features = tuple(categorical_features)
@@ -50,7 +59,13 @@ class C45DecisionTree:
         features = {i: i in categorical for i in range(X.shape[1])}
 
         self.tree_ = _build_tree(
-            X, labels, np.ones(len(y)), features, len(classes), self.max_depth
+            X,
+            labels,
+            np.ones(len(y)),
+            features,
+            len(classes),
+            self.max_depth,
+            self.min_branch_weight,
         )
         self.classes_ = np.asarray(classes)
         self.n_features_in_ = X.shape[1]
@@ -75,13 +90,13 @@ class C45DecisionTree:
         return self.classes_[probabilities.argmax(axis=1)]
 
 
-def _build_tree(X, y, weights, features, n_classes, depth_left):
+def _build_tree(X, y, weights, features, n_classes, depth_left, min_branch_weight):
     class_weights = np.bincount(y, weights=weights, minlength=n_classes)
     node = {"probabilities": class_weights / class_weights.sum(), "children": {}}
     if np.count_nonzero(class_weights) == 1 or depth_left == 0:
         return node
 
-    split = _find_split(X, y, weights, features, n_classes)
+    split = _find_split(X, y, weights, features, n_classes, min_branch_weight)
     if split is None:
         return node
 
@@ -108,13 +123,19 @@ def _build_tree(X, y, weights, features, n_classes, depth_left):
         # Share the weight of each missing row across the branches.
         child_weights[missing[selected]] *= fraction
         child = _build_tree(
-            X[selected], y[selected], child_weights, features, n_classes, next_depth
+            X[selected],
+            y[selected],
+            child_weights,
+            features,
+            n_classes,
+            next_depth,
+            min_branch_weight,
         )
         node["children"][branch] = (child, fraction)
     return node
 
 
-def _find_split(X, y, weights, features, n_classes):
+def _find_split(X, y, weights, features, n_classes, min_branch_weight):
     candidates = []
     for feature, is_categorical in features.items():
         column = X[:, feature]
@@ -125,6 +146,8 @@ def _find_split(X, y, weights, features, n_classes):
         known_labels = y[known]
         known_weights = weights[known]
         missing_weight = weights[~known].sum()
+        if known_weights.sum() < 2 * min_branch_weight - 1e-10:
+            continue
 
         if is_categorical:
             categories = list(dict.fromkeys(values))
@@ -150,7 +173,13 @@ def _find_split(X, y, weights, features, n_classes):
                     known_labels[rows], weights=known_weights[rows], minlength=n_classes
                 )
                 counts.append(count)
-            gain, ratio = _gain_ratio(np.array(counts), missing_weight)
+            counts = np.array(counts)
+            # A split needs at least two branches with enough known weight.
+            if min_branch_weight:
+                large_branches = counts.sum(axis=1) >= min_branch_weight - 1e-10
+                if np.count_nonzero(large_branches) < 2:
+                    continue
+            gain, ratio = _gain_ratio(counts, missing_weight)
             if ratio > best_ratio + 1e-12:
                 best_ratio = ratio
                 best = (feature, threshold, gain, ratio)
