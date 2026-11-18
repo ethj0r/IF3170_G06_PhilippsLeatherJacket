@@ -1,5 +1,8 @@
 """Binary Logistic Regression using Maximum Likelihood Estimation and SGA."""
 
+from pathlib import Path
+
+import joblib
 import numpy as np
 
 
@@ -200,3 +203,20 @@ class LogisticRegression:
         p_pos = self.predict_proba(X)[:, 1]
         pred_indices = (p_pos >= self.threshold).astype(int)
         return self.classes_[pred_indices]
+
+    # ===== Serialization =====
+    def save(self, filepath: str | Path) -> None:
+        """Save the fitted model instance to disk using joblib."""
+        if self.b_ is None:
+            raise RuntimeError("Model is not fitted yet.")
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self, path)
+
+    @classmethod
+    def load(cls, filepath: str | Path) -> "LogisticRegression":
+        """Load a saved LogisticRegression model instance from disk."""
+        model = joblib.load(Path(filepath))
+        if not isinstance(model, cls):
+            raise TypeError(f"Expected {cls.__name__} instance, got {type(model).__name__}")
+        return model
