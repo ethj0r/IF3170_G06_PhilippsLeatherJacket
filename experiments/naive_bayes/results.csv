@@ -5,3 +5,6 @@ mdl,accuracy,0.82144,0.8221,0.79549,1,7,lead*arrival_date requests*channel chann
 mdl_missing_category,accuracy,0.8261,0.82283,0.79883,1,6,lead*arrival_date requests*channel channel*price channel*weekend_nights children room*parking,58
 mdl_extra,accuracy,0.8209,0.81845,0.79198,1,7,lead*arrival_date requests*channel channel*total_cost channel*price weekend_nights*parking room*children prior_cancel,111
 mdl_extra_floating,accuracy,0.8209,0.81845,0.79198,1,7,lead*arrival_date requests*channel channel*total_cost channel*price weekend_nights*parking room*children prior_cancel,113
+baseline_quantile20,accuracy,0.81537,0.81845,0.79,1,7,lead*year_month requests*channel channel*weekday_nights price*meal weekend_nights*parking room*children children,590
+mdl,accuracy,0.82144,0.8221,0.79549,1,7,lead*arrival_date requests*channel channel*price channel*weekend_nights weekend_nights*adults room*children prior_cancel,78
+mdl_missing_category,accuracy,0.8261,0.82283,0.79883,1,6,lead*arrival_date requests*channel channel*price channel*weekend_nights children room*parking,63

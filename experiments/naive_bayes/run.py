@@ -52,7 +52,7 @@ def run(name, config, metric, train_df):
     model.fit(features.transform(X_train)[columns].values, y_train)
     pred = model.predict(features.transform(X_val)[columns].values)
 
-    return {
+    result = {
         'name': name,
         'metric': metric,
         'cv': round(alphas[alpha], 5),
@@ -63,18 +63,43 @@ def run(name, config, metric, train_df):
         'features': ' '.join(columns),
         'seconds': round(time.time() - start),
     }
+    return result, columns, alpha
+
+
+def submit(name, config, columns, alpha, train_df, test_df):
+    config = dict(config)
+    config.pop('floating', None)
+    extra = config.get('extra', False)
+
+    X = prepare(train_df, extra=extra)
+    y = train_df['is_canceled'].values
+    features = NBFeatures(**config).fit(X, y)
+    model = NaiveBayes(categorical_features=range(len(columns)), alpha=alpha)
+    model.fit(features.transform(X)[columns].values, y)
+
+    X_test = features.transform(prepare(test_df, extra=extra))[columns]
+    pred = model.predict(X_test.values).astype(int)
+    submission = pd.DataFrame({'id': test_df['id'], 'is_canceled': pred})
+    path = ROOT / 'output' / f'submission_nb_{name}.csv'
+    path.parent.mkdir(exist_ok=True)
+    submission.to_csv(path, index=False)
+    print(f'  submission -> {path.relative_to(ROOT)}  {submission["is_canceled"].value_counts().to_dict()}')
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--metric', default='accuracy', choices=['accuracy', 'macro_f1'])
     parser.add_argument('--only', nargs='*', default=list(CONFIGS))
+    parser.add_argument('--submit', action='store_true')
     args = parser.parse_args()
 
     train_df = pd.read_csv(ROOT / 'data' / 'train.csv')
+    test_df = pd.read_csv(ROOT / 'data' / 'test.csv')
     for name in args.only:
         print(f'== {name} ({args.metric})', flush=True)
-        result = run(name, CONFIGS[name], args.metric, train_df)
+        result, columns, alpha = run(name, CONFIGS[name], args.metric, train_df)
+        if args.submit:
+            submit(name, CONFIGS[name], columns, alpha, train_df, test_df)
         print(f"  cv={result['cv']}  holdout acc={result['holdout_accuracy']}  "
               f"macro_f1={result['holdout_macro_f1']}  alpha={result['alpha']}", flush=True)
         row = pd.DataFrame([result])
