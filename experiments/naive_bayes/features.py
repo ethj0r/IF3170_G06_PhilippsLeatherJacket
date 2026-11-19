@@ -11,9 +11,19 @@ BASE_PAIRS = [
     'booking_date', 'arrival_date',
 ]
 EXTRA_PAIRS = ['price_per_guest', 'total_cost', 'guests', 'week']
+MISSING_COLUMNS = [
+    'special_requests', 'nightly_rate_idr', 'days_before_arrival', 'num_children',
+    'num_adults', 'meal_package', 'needs_parking', 'room_category',
+]
+FLAG_PAIRS = ['n_missing', 'special_requests_missing']
+TRIPLE_BASE = [
+    'lead', 'arrival_date', 'booking_date', 'channel', 'requests', 'price', 'room', 'weekend_nights',
+    'weekday_nights', 'adults', 'meal', 'parking', 'children', 'year_month', 'weekday', 'returning',
+]
+QUAD_BASE = ['lead', 'arrival_date', 'channel', 'requests', 'price', 'room', 'weekend_nights', 'adults']
 
 
-def prepare(df, extra=False):
+def prepare(df, extra=False, flags=False):
     date_parts = df[['arrival_year', 'arrival_month', 'arrival_day']].rename(
         columns={'arrival_year': 'year', 'arrival_month': 'month', 'arrival_day': 'day'}
     )
@@ -48,6 +58,11 @@ def prepare(df, extra=False):
         X['week'] = arrival.dt.isocalendar().week.astype(float)
         X['price_per_guest'] = X['price'] / guests.where(guests > 0)
         X['total_cost'] = X['price'] * X['nights']
+
+    if flags:
+        for c in MISSING_COLUMNS:
+            X[f'{c}_missing'] = df[c].isna().astype(int)
+        X['n_missing'] = df[MISSING_COLUMNS].isna().sum(axis=1).clip(upper=3)
     return X
 
 
@@ -101,18 +116,19 @@ def mdl_cuts(values, y, n_bins=None):
 
 
 class NBFeatures:
-    def __init__(self, binning='quantile', n_bins=20, missing='skip', extra=False, pairs=True):
+    def __init__(self, binning='quantile', n_bins=20, missing='skip', extra=False, flags=False, pairs=True):
         self.binning = binning
         self.n_bins = n_bins
         self.missing = missing
         self.extra = extra
+        self.flags = flags
         self.pairs = pairs
 
     def fit(self, X, y):
         self.numerical_ = BASE_NUMERICAL + (EXTRA_NUMERICAL if self.extra else [])
         cut_fn = mdl_cuts if self.binning == 'mdl' else quantile_cuts
         self.cuts_ = {c: cut_fn(X[c].astype(float).values, y, self.n_bins) for c in self.numerical_}
-        base = BASE_PAIRS + (EXTRA_PAIRS if self.extra else [])
+        base = BASE_PAIRS + (EXTRA_PAIRS if self.extra else []) + (FLAG_PAIRS if self.flags else [])
         self.pair_list_ = list(itertools.combinations(base, 2)) if self.pairs else []
         return self
 
@@ -129,3 +145,37 @@ class NBFeatures:
             value = X[a].astype(str) + '|' + X[b].astype(str)
             joined[f'{a}*{b}'] = value.where(X[a].notna() & X[b].notna(), np.nan)
         return pd.concat([X, pd.DataFrame(joined, index=X.index)], axis=1)
+
+
+class WideFeatures:
+    def __init__(self, fine_bins=(10, 40), triples=TRIPLE_BASE, quads=QUAD_BASE):
+        self.fine_bins = fine_bins
+        self.triples = triples
+        self.quads = quads
+
+    def fit(self, X, y):
+        self.base_ = NBFeatures(binning='mdl', missing='category', extra=True, flags=True, pairs=False).fit(X, y)
+        self.fine_cuts_ = {
+            (c, k): quantile_cuts(X[c].astype(float).values, y, k)
+            for k in self.fine_bins for c in self.base_.numerical_
+        }
+        return self
+
+    def transform(self, X):
+        S = self.base_.transform(X)
+        fine = {}
+        for (c, k), cuts in self.fine_cuts_.items():
+            values = X[c].astype(float)
+            fine[f'{c}_q{k}'] = np.where(values.isna(), 'missing', np.digitize(values, cuts).astype(str))
+
+        text = S.astype(str)
+        crosses = {}
+        for size, columns in [(2, list(S.columns)), (3, self.triples), (4, self.quads)]:
+            for combo in itertools.combinations(columns, size):
+                value = text[combo[0]]
+                for c in combo[1:]:
+                    value = value + '|' + text[c]
+                crosses['*'.join(combo)] = value
+        return pd.concat(
+            [S, pd.DataFrame(fine, index=X.index), pd.DataFrame(crosses, index=X.index)], axis=1
+        )

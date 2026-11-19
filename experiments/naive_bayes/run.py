@@ -27,6 +27,8 @@ CONFIGS = {
     'mdl_missing_category': dict(binning='mdl', missing='category'),
     'mdl_extra': dict(binning='mdl', extra=True),
     'mdl_extra_floating': dict(binning='mdl', extra=True, floating=True),
+    'mdl_flags': dict(binning='mdl', flags=True),
+    'mdl_missing_category_flags': dict(binning='mdl', missing='category', flags=True),
 }
 
 
@@ -34,8 +36,9 @@ def run(name, config, metric, train_df):
     config = dict(config)
     floating = config.pop('floating', False)
     extra = config.get('extra', False)
+    flags = config.get('flags', False)
 
-    X = prepare(train_df, extra=extra)
+    X = prepare(train_df, extra=extra, flags=flags)
     y = train_df['is_canceled'].values
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE
@@ -70,14 +73,15 @@ def submit(name, config, columns, alpha, train_df, test_df):
     config = dict(config)
     config.pop('floating', None)
     extra = config.get('extra', False)
+    flags = config.get('flags', False)
 
-    X = prepare(train_df, extra=extra)
+    X = prepare(train_df, extra=extra, flags=flags)
     y = train_df['is_canceled'].values
     features = NBFeatures(**config).fit(X, y)
     model = NaiveBayes(categorical_features=range(len(columns)), alpha=alpha)
     model.fit(features.transform(X)[columns].values, y)
 
-    X_test = features.transform(prepare(test_df, extra=extra))[columns]
+    X_test = features.transform(prepare(test_df, extra=extra, flags=flags))[columns]
     pred = model.predict(X_test.values).astype(int)
     submission = pd.DataFrame({'id': test_df['id'], 'is_canceled': pred})
     path = ROOT / 'output' / f'submission_nb_{name}.csv'
