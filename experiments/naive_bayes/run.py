@@ -13,7 +13,7 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 
-from experiments.naive_bayes.features import NBFeatures, prepare
+from src.nb_features import NBFeatures, prepare_nb_features as prepare
 from experiments.naive_bayes.search import cv_score, forward_selection, make_folds
 from src.naive_bayes import NaiveBayes
 

@@ -13,18 +13,21 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
-from experiments.naive_bayes.features import WideFeatures, prepare
+from src.nb_features import QUAD_BASE, TRIPLE_BASE, WideFeatures, prepare_nb_features as prepare
 from src.naive_bayes import WeightedNaiveBayes
 
 RANDOM_STATE = 824
 RESULTS_PATH = Path(__file__).parent / 'results.csv'
 
 
-def fit_predict(X_a, y_a, X_b, alpha, l2):
-    features = WideFeatures().fit(X_a, y_a)
+def fit_predict(X_a, y_a, X_b, args):
+    features = WideFeatures(
+        triples=TRIPLE_BASE[:args.triples], quads=QUAD_BASE[:args.quads], fine_crosses=args.fine_crosses
+    ).fit(X_a, y_a)
     A = features.transform(X_a)
     model = WeightedNaiveBayes(
-        categorical_features=range(A.shape[1]), alpha=alpha, l2=l2, random_state=RANDOM_STATE
+        categorical_features=range(A.shape[1]), alpha=args.alpha, l2=args.l2,
+        n_folds=args.inner_folds, random_state=RANDOM_STATE,
     )
     model.fit(A.values, y_a)
     return model.predict(features.transform(X_b).values), A.shape[1]
@@ -34,10 +37,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--alpha', type=float, default=0.3)
     parser.add_argument('--l2', type=float, default=10.0)
+    parser.add_argument('--inner-folds', type=int, default=5)
+    parser.add_argument('--triples', type=int, default=16)
+    parser.add_argument('--quads', type=int, default=8)
+    parser.add_argument('--fine-crosses', action='store_true')
     parser.add_argument('--cv', action='store_true')
     parser.add_argument('--submit', action='store_true')
     args = parser.parse_args()
     name = f'wnb_wide_a{args.alpha:g}_l{args.l2:g}'
+    if (args.inner_folds, args.triples, args.quads) != (5, 16, 8):
+        name += f'_f{args.inner_folds}_t{args.triples}_q{args.quads}'
+    if args.fine_crosses:
+        name += '_fine'
 
     train_df = pd.read_csv(ROOT / 'data' / 'train.csv')
     X = prepare(train_df, extra=True, flags=True)
@@ -52,12 +63,12 @@ def main():
         scores = []
         skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
         for a, b in skf.split(X_train, y_train):
-            pred, _ = fit_predict(X_train.iloc[a], y_train[a], X_train.iloc[b], args.alpha, args.l2)
+            pred, _ = fit_predict(X_train.iloc[a], y_train[a], X_train.iloc[b], args)
             scores.append(accuracy_score(y_train[b], pred))
             print(f'  fold accuracy = {scores[-1]:.5f}  ({time.time() - start:.0f} s)', flush=True)
         cv = round(float(np.mean(scores)), 5)
 
-    pred, n_features = fit_predict(X_train, y_train, X_val, args.alpha, args.l2)
+    pred, n_features = fit_predict(X_train, y_train, X_val, args)
     result = {
         'name': name,
         'metric': 'accuracy',
@@ -66,7 +77,7 @@ def main():
         'holdout_macro_f1': round(f1_score(y_val, pred, average='macro'), 5),
         'alpha': args.alpha,
         'n_features': n_features,
-        'features': f'wide l2={args.l2:g}',
+        'features': f'wide l2={args.l2:g} inner_folds={args.inner_folds} triples={args.triples} quads={args.quads} fine={args.fine_crosses}',
         'seconds': round(time.time() - start),
     }
     print(f"== {name}: cv={cv}  holdout acc={result['holdout_accuracy']}  macro_f1={result['holdout_macro_f1']}")
@@ -74,7 +85,7 @@ def main():
 
     if args.submit:
         test_df = pd.read_csv(ROOT / 'data' / 'test.csv')
-        pred, _ = fit_predict(X, y, prepare(test_df, extra=True, flags=True), args.alpha, args.l2)
+        pred, _ = fit_predict(X, y, prepare(test_df, extra=True, flags=True), args)
         submission = pd.DataFrame({'id': test_df['id'], 'is_canceled': pred.astype(int)})
         path = ROOT / 'output' / f'submission_{name}.csv'
         submission.to_csv(path, index=False)
