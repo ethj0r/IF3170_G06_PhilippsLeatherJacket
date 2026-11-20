@@ -21,9 +21,11 @@ TRIPLE_BASE = [
     'weekday_nights', 'adults', 'meal', 'parking', 'children', 'year_month', 'weekday', 'returning',
 ]
 QUAD_BASE = ['lead', 'arrival_date', 'channel', 'requests', 'price', 'room', 'weekend_nights', 'adults']
+FINE_NUMERICAL = ['lead', 'price', 'arrival_date', 'booking_date', 'total_cost']
+FINE_CATEGORICAL = ['channel', 'requests', 'room', 'weekend_nights', 'weekday_nights', 'adults']
 
 
-def prepare(df, extra=False, flags=False):
+def prepare_nb_features(df, extra=False, flags=False):
     date_parts = df[['arrival_year', 'arrival_month', 'arrival_day']].rename(
         columns={'arrival_year': 'year', 'arrival_month': 'month', 'arrival_day': 'day'}
     )
@@ -148,10 +150,11 @@ class NBFeatures:
 
 
 class WideFeatures:
-    def __init__(self, fine_bins=(10, 40), triples=TRIPLE_BASE, quads=QUAD_BASE):
+    def __init__(self, fine_bins=(10, 40), triples=TRIPLE_BASE, quads=QUAD_BASE, fine_crosses=False):
         self.fine_bins = fine_bins
         self.triples = triples
         self.quads = quads
+        self.fine_crosses = fine_crosses
 
     def fit(self, X, y):
         self.base_ = NBFeatures(binning='mdl', missing='category', extra=True, flags=True, pairs=False).fit(X, y)
@@ -159,7 +162,29 @@ class WideFeatures:
             (c, k): quantile_cuts(X[c].astype(float).values, y, k)
             for k in self.fine_bins for c in self.base_.numerical_
         }
+        if self.fine_crosses:
+            self.cross_cuts_ = {
+                (c, k): quantile_cuts(X[c].astype(float).values, y, k)
+                for c in FINE_NUMERICAL for k in (10, 20, 40)
+            }
         return self
+
+    def _fine_crosses(self, X):
+        binned = {}
+        for (c, k), cuts in self.cross_cuts_.items():
+            values = X[c].astype(float)
+            binned[(c, k)] = pd.Series(
+                np.where(values.isna(), 'm', np.digitize(values, cuts).astype(str)), index=X.index
+            )
+        crosses = {}
+        grid = [(c, k) for c in FINE_NUMERICAL[:4] for k in (20, 40)]
+        for (a, ka), (b, kb) in itertools.combinations(grid, 2):
+            if a != b:
+                crosses[f'{a}{ka}x{b}{kb}'] = binned[(a, ka)] + '|' + binned[(b, kb)]
+        for a, b in itertools.combinations(FINE_NUMERICAL, 2):
+            for c in FINE_CATEGORICAL:
+                crosses[f'{a}10x{b}10x{c}'] = binned[(a, 10)] + '|' + binned[(b, 10)] + '|' + X[c].astype(str)
+        return pd.DataFrame(crosses, index=X.index)
 
     def transform(self, X):
         S = self.base_.transform(X)
@@ -176,6 +201,7 @@ class WideFeatures:
                 for c in combo[1:]:
                     value = value + '|' + text[c]
                 crosses['*'.join(combo)] = value
-        return pd.concat(
-            [S, pd.DataFrame(fine, index=X.index), pd.DataFrame(crosses, index=X.index)], axis=1
-        )
+        parts = [S, pd.DataFrame(fine, index=X.index), pd.DataFrame(crosses, index=X.index)]
+        if self.fine_crosses:
+            parts.append(self._fine_crosses(X))
+        return pd.concat(parts, axis=1)
