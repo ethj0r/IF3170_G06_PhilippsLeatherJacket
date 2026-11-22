@@ -1,0 +1,20 @@
+name,metric,cv,holdout_accuracy,holdout_macro_f1,alpha,n_features,features,seconds
+baseline_quantile20,accuracy,0.81537,0.81845,0.79,1,7,lead*year_month requests*channel channel*weekday_nights price*meal weekend_nights*parking room*children children,82
+quantile10,accuracy,0.81583,0.81553,0.78728,1,7,lead*year_month requests*channel price*meal weekend_nights*adults channel*weekday_nights children*parking children,75
+mdl,accuracy,0.82144,0.8221,0.79549,1,7,lead*arrival_date requests*channel channel*price channel*weekend_nights weekend_nights*adults room*children prior_cancel,75
+mdl_missing_category,accuracy,0.8261,0.82283,0.79883,1,6,lead*arrival_date requests*channel channel*price channel*weekend_nights children room*parking,58
+mdl_extra,accuracy,0.8209,0.81845,0.79198,1,7,lead*arrival_date requests*channel channel*total_cost channel*price weekend_nights*parking room*children prior_cancel,111
+mdl_extra_floating,accuracy,0.8209,0.81845,0.79198,1,7,lead*arrival_date requests*channel channel*total_cost channel*price weekend_nights*parking room*children prior_cancel,113
+baseline_quantile20,accuracy,0.81537,0.81845,0.79,1,7,lead*year_month requests*channel channel*weekday_nights price*meal weekend_nights*parking room*children children,590
+mdl,accuracy,0.82144,0.8221,0.79549,1,7,lead*arrival_date requests*channel channel*price channel*weekend_nights weekend_nights*adults room*children prior_cancel,78
+mdl_missing_category,accuracy,0.8261,0.82283,0.79883,1,6,lead*arrival_date requests*channel channel*price channel*weekend_nights children room*parking,63
+mdl_flags,accuracy,0.82578,0.82228,0.79754,1,7,lead*arrival_date requests*channel channel*special_requests_missing channel*price weekend_nights*adults room*parking needs_parking_missing,96
+mdl_missing_category_flags,accuracy,0.8261,0.82283,0.79883,1,6,lead*arrival_date requests*channel channel*price channel*weekend_nights children room*parking,84
+wnb_wide_a0.3_l10,accuracy,0.85451,0.86137,0.84109,0.3,1239,wide l2=10,129
+wnb_wide_a0.3_l30,accuracy,0.85364,0.86137,0.84151,0.3,1239,wide l2=30 inner_folds=5 triples=16 quads=8,128
+wnb_wide_a0.3_l3,accuracy,0.85158,0.85808,0.83727,0.3,1239,wide l2=3 inner_folds=5 triples=16 quads=8,122
+wnb_wide_a0.5_l10,accuracy,0.8535,0.86027,0.83969,0.5,1239,wide l2=10 inner_folds=5 triples=16 quads=8,121
+wnb_wide_a0.3_l10_f10_t16_q8,accuracy,0.85236,0.86155,0.84118,0.3,1239,wide l2=10 inner_folds=10 triples=16 quads=8,205
+wnb_wide_a0.3_l10_f5_t12_q0,accuracy,0.85387,0.85918,0.83872,0.3,829,wide l2=10 inner_folds=5 triples=12 quads=0,72
+wnb_wide_a0.3_l10_f5_t16_q0,accuracy,0.85382,0.85954,0.83909,0.3,1169,wide l2=10 inner_folds=5 triples=16 quads=0,113
+wnb_wide_a0.3_l30_fine,accuracy,0.85839,0.86374,0.8435,0.3,1323,wide l2=30 inner_folds=5 triples=16 quads=8 fine=True,134
