@@ -1,0 +1,25 @@
+{
+  "model": "single from-scratch SVM",
+  "public_score": 0.86363,
+  "submission": "submission_svm_0.86363.csv",
+  "submission_md5": "5e3c0a79cddbd72007ee0e8f170f85ef",
+  "rows": 6844,
+  "positives": 2021,
+  "model_file": "svm_scratch_0.86363.pkl",
+  "model_md5": "b0c443aafc3801c621caebaad35e3806",
+  "holdout": {
+    "accuracy": 0.8635,
+    "macro_f1": 0.8387,
+    "auc": 0.9158
+  },
+  "config": {
+    "kernel": "rbf",
+    "C": 20.0,
+    "gamma_mult": 1.25,
+    "features": 89,
+    "samples": 15000,
+    "seed": 824
+  },
+  "source": "scripts/train_final_scratch.py",
+  "notes": "single from-scratch SVM, engineered features only; public score 0.86363"
+}
