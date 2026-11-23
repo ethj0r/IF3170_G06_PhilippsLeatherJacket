@@ -1,0 +1,41 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[indonesian]{babel}
+\usepackage{lmodern}
+\usepackage[top=0.8in,bottom=1in,left=1in,right=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs,tabularx}
+\usepackage{listings}
+\usepackage{fancyhdr,lastpage}
+\usepackage[normalem]{ulem}
+\usepackage[unicode,hidelinks]{hyperref}
+
+\newcommand{\namakelompok}{G06 PhilippsLeatherJacket}
+\setcounter{tocdepth}{2}
+\lstset{language=Python,basicstyle=\ttfamily\footnotesize,breaklines=true}
+
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{34pt}
+\setlength{\headsep}{18pt}
+\fancyhead[L]{%
+  \includegraphics[height=20pt]{assets/logos/itb.pdf}\hspace{0.8em}%
+  \includegraphics[height=20pt]{assets/logos/stei.pdf}%
+}
+\fancyhead[R]{\footnotesize
+  \shortstack[r]{\textbf{IF3170 Inteligensi Artifisial}\\
+    Laporan Tugas Besar 2\\
+    \textit{Semester I 2026/2027}}%
+}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyfoot[L]{\footnotesize\namakelompok}
+\fancyfoot[R]{\footnotesize Halaman \thepage{} dari \pageref*{LastPage}}
+
+\hypersetup{
+  pdftitle={Laporan Tugas Besar 2 IF3170},
+  pdfauthor={G06 PhilippsLeatherJacket},
+  bookmarksnumbered=true,
+  linktoc=all
+}
