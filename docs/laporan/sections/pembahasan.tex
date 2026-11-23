@@ -1,12 +1,159 @@
 \section{Pembahasan}
 
 \subsection{Cleaning dan Preprocessing}
-% Isi tiap tahap yang digunakan dan alasannya.
+\label{subsec:preprocessing}
+
+Tahap prapemrosesan data (\textit{data preprocessing}) dan pembersihan (\textit{data cleaning})
+merupakan fondasi kritis sebelum data disalurkan ke model klasifikasi. Kualitas data mentah
+sangat menentukan kemampuan generalisasi model pembelajaran mesin. Seluruh rangkaian prapemrosesan
+diimplementasikan secara modular pada paket \texttt{src/preprocess/} dan dieksekusi secara
+terintegrasi melalui fungsi \texttt{run\_preprocessing}. Alur ini terdiri atas tiga tahapan utama:
+pembersihan data, transformasi data, serta seleksi fitur dan reduksi dimensi.
+
 \subsubsection{Pembersihan Data}
+
+Tahap pembersihan data menangani tiga anomali utama pada dataset mentah:
+
+\paragraph{Penanganan Nilai Hilang (\textit{Missing Values}).}
+Pemeriksaan pada dataset latih dan uji menunjukkan adanya nilai kosong (\textit{missing values})
+pada sejumlah atribut numerik dan kategorikal. Nilai yang hilang diimputasi menggunakan statistik
+yang dipelajari semata-mata dari data latih guna mencegah kebocoran data (\textit{data leakage}):
+\begin{itemize}
+  \item \textbf{Fitur Numerik}: Diimputasi menggunakan nilai median data latih:
+        \[
+        x_{\text{impute}} = \text{median}(X_{\text{train}, j}) .
+        \]
+        Median dipilih daripada \textit{mean} karena median bersifat kekal (\textit{robust}) terhadap nilai-nilai
+        ekstrem (\textit{outliers}) pada kolom seperti \texttt{nightly\_rate\_idr} dan \texttt{days\_before\_arrival}.
+        Untuk atribut diskrit seperti \texttt{num\_children}, nilai kosong diisi dengan modus atau 0.
+  \item \textbf{Fitur Kategorikal}: Diimputasi menggunakan nilai modus (\textit{most frequent value})
+        dari data latih agar konsisten dengan kategori dominan.
+\end{itemize}
+
+\paragraph{Penanganan Data Ganda (\textit{Duplicates}).}
+Deteksi duplikasi baris identik dilakukan menggunakan fungsi \texttt{df.duplicated()}. Baris-baris
+yang memiliki nilai sama persis di seluruh kolom diidentifikasi dan ditangani untuk mencegah pembobotan
+berlebih (\textit{over-representation}) dari instans yang identik pada fungsi objektif model.
+
+\paragraph{Penanganan Data Tidak Valid (\textit{Invalid Data}).}
+Berdasarkan pemahaman domain reservasi perhotelan, didefinisikan kriteria data yang tidak valid secara logis:
+\begin{enumerate}
+  \item Nilai numerik bernilai negatif ($< 0$), yang tidak masuk akal untuk kuantitas orang, malam, atau biaya.
+  \item Reservasi tanpa tamu dewasa (\texttt{num\_adults == 0}), karena reservasi hotel memerlukan penanggung jawab dewasa.
+  \item Reservasi dengan total durasi menginap 0 malam (\texttt{weekend\_nights + weekday\_nights == 0}).
+  \item Tanggal kedatangan yang tidak valid secara kalender (misalnya tanggal 29 Februari pada tahun non-kabisat).
+\end{enumerate}
+Strategi penanganannya dibedakan secara tegas antara data latih dan data uji:
+\begin{itemize}
+  \item \textbf{Data Latih}: Baris-baris tidak valid dihapus (\textit{dropped}) karena jumlahnya relatif kecil
+        ($< 200$ baris) sehingga tidak mengurangi ukuran data latih secara signifikan, namun efektif menjaga
+        kebersihan distribusi data latih.
+  \item \textbf{Data Uji}: Baris tidak valid \textbf{tidak boleh dihapus} agar jumlah baris submisi tetap utuh
+        (6.844 baris). Nilai yang tidak valid pada data uji diperbaiki (\textit{repaired}) dengan menggantikannya
+        menggunakan nilai median yang dipelajari dari data latih.
+\end{itemize}
+
 \subsubsection{Transformasi Data}
+
+\paragraph{Pengodean Fitur Kategorikal (\textit{Categorical Encoding}).}
+Model pembelajaran mesin berbasis aljabar linier dan geometri memerlukan representasi numerik.
+Dua pendekatan pengodean diterapkan berdasarkan sifat skala variabelnya:
+\begin{itemize}
+  \item \textbf{\textit{Ordinal Encoding}}: Diterapkan pada fitur bertingkat (ordinal) yang memiliki urutan logis,
+        khususnya \texttt{meal\_package}:
+        \[
+        \text{"Room Only"} \mapsto 1,\quad \text{"Breakfast"} \mapsto 2,\quad \text{"Half Board"} \mapsto 3,\quad \text{"Full Board"} \mapsto 4 .
+        \]
+        Pemetaan ini mempertahankan informasi urutan dan tingkat kelengkapan paket makan tanpa menambah dimensi fitur.
+  \item \textbf{\textit{One-Hot Encoding}}: Diterapkan pada fitur nominal tanpa hierarki urutan, yaitu \texttt{room\_category}
+        dan \texttt{booking\_channel}. Digunakan parameter \texttt{drop\_first=True} untuk membuang satu kategori basis
+        guna mencegah multikolinearitas sempurna (\textit{dummy variable trap}). Kolom pada data uji secara eksplisit
+        diselaraskan (\textit{reindexed}) dengan data latih agar dimensi kedua himpunan data selalu konsisten.
+\end{itemize}
+
+\paragraph{Penskalaan Fitur (\textit{Feature Scaling}).}
+Atribut numerik memiliki rentang skala yang sangat beragam, mulai dari jumlah orang ($1$--$4$) hingga harga per malam
+\texttt{nightly\_rate\_idr} yang mencapai ratusan ribu hingga jutaan rupiah. Variabel dengan rentang besar akan
+mendominasi fungsi jarak atau gradien secara tidak proporsional. Oleh karena itu, seluruh fitur numerik distandarisasi
+menggunakan \texttt{StandardScaler}:
+\[
+z = \frac{x - \mu}{\sigma} ,
+\]
+di mana $\mu$ adalah rerata dan $\sigma$ adalah standar deviasi yang dihitung semata-mata dari data latih.
+Penskalaan ini krusial untuk algoritma berbasis jarak seperti KNN dan berbasis margin seperti SVM.
+
+\paragraph{Penanganan Ketidakseimbangan Kelas (\textit{Class Imbalance}).}
+Dataset pembatalan hotel memiliki distribusi target \texttt{is\_canceled} yang tidak seimbang, dengan kelas
+positif (dibatalkan) mencakup sekitar $32{,}77\%$ dan kelas negatif (tidak batal) sebesar $67{,}23\%$.
+Untuk model yang rentan bias terhadap kelas mayoritas, diterapkan teknik \textit{oversampling} sintetis
+\textbf{SMOTE} (\textit{Synthetic Minority Over-sampling Technique}). SMOTE bekerja dengan cara membangkitkan
+sampel sintetis baru pada segmen garis yang menghubungkan titik kelas minoritas dengan $k$ tetangga terdekatnya:
+\[
+x_{\text{baru}} = x_i + \lambda (x_{zi} - x_i), \quad \lambda \sim \mathcal{U}(0, 1) .
+\]
+Penerapan SMOTE dibatasi secara ketat hanya pada data latih, dan tidak pernah diterapkan pada himpunan validasi
+maupun data uji guna menjamin keaslian evaluasi performa model.
+
 \subsubsection{Seleksi Fitur dan Reduksi Dimensi}
 
+\paragraph{Seleksi Fitur Univariat (\textit{SelectKBest}).}
+Untuk membuang fitur-fitur yang tidak informatif atau memiliki korelasi rendah terhadap target, digunakan
+metode seleksi univariat \texttt{SelectKBest} dengan uji statistik ANOVA F-Value (\texttt{f\_classif}):
+\[
+F = \frac{\text{MSB}}{\text{MSW}} = \frac{\sum_{c} n_c (\bar{x}_c - \bar{x})^2 / (K - 1)}{\sum_{c} \sum_{i} (x_{ci} - \bar{x}_c)^2 / (N - K)} ,
+\]
+di mana $\text{MSB}$ mengukur varians antarkelompok kelas dan $\text{MSW}$ mengukur varians di dalam kelompok kelas.
+Dipilih $K = 15$ fitur teratas dengan skor tertinggi. Hasil pemeringkatan menunjukkan bahwa fitur-fitur seperti
+\texttt{days\_before\_arrival}, \texttt{special\_requests}, \texttt{arrival\_year}, dan \texttt{nightly\_rate\_idr}
+memiliki kontribusi diskriminasi paling dominan dalam membedakan reservasi yang dibatalkan dan yang tidak.
+
+\paragraph{Reduksi Dimensi Principal Component Analysis (PCA).}
+Setelah seleksi 15 fitur terbaik, diterapkan teknik \textit{Principal Component Analysis} (PCA) untuk
+mengatasi fenomena \textit{Curse of Dimensionality} (kutukan dimensi) dan mereduksi redundansi antarkomponen.
+PCA mencari arah vektor eigen yang memaksimalkan variansi proyeksi data melalui dekomposisi matriks kovarians:
+\[
+\mathbf{\Sigma} v_i = \lambda_i v_i .
+\]
+Dengan menentukan batas retensi variansi kumulatif sebesar $95\%$ ($\sum_{i=1}^m \lambda_i / \sum_{j=1}^d \lambda_j \ge 0{,}95$),
+dimensi data berhasil direduksi secara signifikan dari 15 fitur menjadi \textbf{9 komponen utama}.
+Reduksi ini mempertahankan informasi krusial data sekaligus meningkatkan efisiensi waktu komputasi jarak pada model KNN.
+
 \subsection{Metodologi Validasi dan Metrik}
+
+Untuk mengevaluasi performa kelima model klasifikasi secara objektif dan menghindari \textit{data leakage},
+diterapkan metodologi pemisahan data yang ketat dan pemilihan metrik evaluasi yang representatif.
+
+\paragraph{Skema Pembagian Data dan Validasi Silang.}
+Data latih dibagi menjadi data latih dan data validasi dengan rasio $85:15$ menggunakan teknik
+pembagian terstratifikasi (\textit{stratified train-validation split}). Stratifikasi dilakukan tidak hanya
+berdasarkan label target $y \in \{0, 1\}$, melainkan juga terhadap indikator data asli versus sintetis SMOTE.
+Selain itu, pengujian kestabilan hiperparameter menggunakan \textit{Stratified 5-Fold Cross Validation}.
+Kaidah validasi paling mendasar yang diterapkan adalah: \textbf{seluruh metrik evaluasi hanya dihitung pada baris
+data asli} (\textit{original rows only}), sedangkan sampel sintetis SMOTE tidak pernah diikutsertakan dalam kalkulasi
+skor evaluasi. Hal ini menjamin bahwa metrik yang dilaporkan mencerminkan performa nyata terhadap distribusi data sebenarnya.
+
+\paragraph{Metrik Evaluasi.}
+Karena terdapat ketidakseimbangan kelas ($32{,}77\%$ kelas positif), akurasi standar dapat memberikan
+ilusi performa tinggi padahal model mengabaikan kelas minoritas. Oleh sebab itu, rangkaian metrik berikut digunakan:
+\begin{enumerate}
+  \item \textbf{Akurasi}:
+        \[
+        \text{Akurasi} = \frac{TP + TN}{TP + TN + FP + FN}
+        \]
+  \item \textbf{Presisi dan \textit{Recall} per Kelas}:
+        \[
+        \text{Presisi}_c = \frac{TP_c}{TP_c + FP_c}, \qquad \text{Recall}_c = \frac{TP_c}{TP_c + FN_c}
+        \]
+  \item \textbf{Macro-Averaged F1-Score (Metrik Utama)}:
+        \[
+        \text{Macro-F1} = \frac{1}{|\mathcal{C}|} \sum_{c \in \mathcal{C}} \frac{2 \cdot \text{Presisi}_c \cdot \text{Recall}_c}{\text{Presisi}_c + \text{Recall}_c}
+        \]
+        \textit{Macro-F1} menghitung nilai rata-rata F1 unweighted antarkelas, sehingga kelas pembatalan ($1$)
+        dan non-batal ($0$) memiliki bobot kepentingan yang setara terlepas dari jumlah frekuensinya.
+  \item \textbf{Matriks Konfusi (\textit{Confusion Matrix})}:
+        Memetakan perbandingan langsung antara label aktual dan label prediksi guna mendeteksi kecenderungan
+        kesalahan tipe I (\textit{False Positive}) dan kesalahan tipe II (\textit{False Negative}).
+\end{enumerate}
 
 \input{sections/models/knn}
 \input{sections/models/dtl}

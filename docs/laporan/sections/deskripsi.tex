@@ -2,6 +2,157 @@
 
 \subsection{Konteks dan Tujuan}
 
+Pembatalan pemesanan kamar tanpa pemberitahuan dini merupakan salah satu tantangan operasional
+terbesar dalam industri perhotelan modern. Tingkat pembatalan yang tidak terantisipasi menyebabkan
+kamar hotel terbuang kosong (\textit{room vacancy}), menurunkan efisiensi penetapan harga kamar dinamis,
+serta mengganggu proyeksi pendapatan dan manajemen logistik. Sebaliknya, upaya penanggulangan melalui
+kebijakan \textit{overbooking} yang agresif berisiko menimbulkan insiden penolakan tamu (\textit{overbooking walk}),
+yang dapat merusak reputasi hotel dan kepuasan pelanggan secara signifikan.
+
+Secara formal, persoalan ini dimodelkan sebagai masalah pembelajaran mesin terbimbing (\textit{supervised learning})
+untuk klasifikasi biner. Diberikan himpunan data latih $\mathcal{D} = \{(x_i, y_i)\}_{i=1}^N$, dengan
+vektor fitur masukan $x_i \in \mathbf{R}^d$ yang merepresentasikan atribut historis pemesanan, dan
+label target biner $y_i \in \{0, 1\}$. Tujuan dari tugas ini adalah mempelajari fungsi pemetaan hipotesis
+$\hat{f}: \mathbf{R}^d \to \{0, 1\}$ (atau estimator probabilitas posterior $\hat{P}(y = 1 \mid x)$)
+yang meminimalkan risiko empiris terhadap fungsi kerugian yang ditentukan:
+\[
+\min_{f \in \mathcal{H}} \frac{1}{N} \sum_{i=1}^N \mathcal{L}(f(x_i), y_i) .
+\]
+
+Untuk memahami mekanisme internal algoritma secara mendalam, lima model klasifikasi
+diimplementasikan secara mandiri dari nol (\textit{from scratch}) tanpa mengandalkan pustaka tingkat tinggi:
+\begin{enumerate}
+  \item \textit{k}-Nearest Neighbors (KNN)
+  \item Decision Tree Learning (DTL) berbasis algoritma C4.5
+  \item Regresi Logistik (\textit{Logistic Regression})
+  \item Support Vector Machine (SVM) dengan solver SMO dan fungsi kernel
+  \item Naive Bayes (Gaussian, Kategorikal, dan \textit{Weighted Naive Bayes})
+\end{enumerate}
+Setiap model diuji kemampuannya, dioptimasi hiperparameternya, dibandingkan secara kuantitatif
+terhadap pustaka baku industri \texttt{scikit-learn}, serta diuji generalisasinya pada platform kompetisi Kaggle.
+
 \subsection{Dataset dan Variabel Target}
 
+Dataset yang digunakan merupakan data historis reservasi hotel yang disediakan pada kompetisi
+Tugas Besar IF3170 Semester I Tahun 2026/2027. Dataset terdiri atas dua himpunan:
+\begin{itemize}
+  \item \textbf{Data Latih (\textit{Training Set})}: Berisi 27.373 baris transaksi reservasi dengan 18 kolom fitur
+        dan 1 kolom target (\texttt{is\_canceled}).
+  \item \textbf{Data Uji (\textit{Test Set})}: Berisi 6.844 baris transaksi reservasi dengan 18 kolom fitur yang
+        digunakan untuk evaluasi submisi kompetisi.
+\end{itemize}
+
+Variabel target yang diprediksi adalah \texttt{is\_canceled}, yaitu variabel biner diskrit dengan ketentuan:
+\begin{itemize}
+  \item $y = 0$: Reservasi tidak dibatalkan (tamu hadir atau menginap). Terdapat 18.404 baris ($67{,}23\%$).
+  \item $y = 1$: Reservasi dibatalkan sebelum kedatangan. Terdapat 8.969 baris ($32{,}77\%$).
+\end{itemize}
+
+Rincian seluruh atribut dalam dataset disajikan pada Tabel~\ref{tab:deskripsi-fitur}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Daftar dan deskripsi atribut pada dataset reservasi hotel.}
+  \label{tab:deskripsi-fitur}
+  \footnotesize
+  \begin{tabularx}{\textwidth}{@{}llcX@{}}
+    \toprule
+    \textbf{Nama Fitur} & \textbf{Tipe Data} & \textbf{Nilai Hilang} & \textbf{Deskripsi} \\
+    \midrule
+    \texttt{id} & String & 0 & Pengidentifikasi unik setiap pemesanan \\
+    \texttt{num\_adults} & Numerik & 809 ($2{,}96\%$) & Jumlah tamu dewasa dalam reservasi \\
+    \texttt{num\_children} & Numerik & 3.035 ($11{,}09\%$) & Jumlah anak-anak dalam reservasi \\
+    \texttt{weekend\_nights} & Numerik & 0 & Jumlah malam akhir pekan (Sabtu/Minggu) yang dipesan \\
+    \texttt{weekday\_nights} & Numerik & 0 & Jumlah malam hari kerja (Senin--Jumat) yang dipesan \\
+    \texttt{meal\_package} & Kategorikal & 1.760 ($6{,}43\%$) & Paket makan yang dipilih (Room Only, Breakfast, dsb.) \\
+    \texttt{needs\_parking} & Kategorikal & 1.082 ($3{,}95\%$) & Indikator apakah tamu membutuhkan tempat parkir \\
+    \texttt{room\_category} & Kategorikal & 1.002 ($3{,}66\%$) & Kategori tipe kamar yang dipesan \\
+    \texttt{days\_before\_arrival} & Numerik & 1.123 ($4{,}10\%$) & Jumlah hari antara tanggal pemesanan dan kedatangan \\
+    \texttt{arrival\_year} & Numerik & 0 & Tahun tanggal kedatangan \\
+    \texttt{arrival\_month} & Numerik & 0 & Bulan tanggal kedatangan ($1$--$12$) \\
+    \texttt{arrival\_day} & Numerik & 0 & Tanggal kedatangan dalam bulan ($1$--$31$) \\
+    \texttt{booking\_channel} & Kategorikal & 0 & Kanal distribusi pemesanan (Online, Offline, dsb.) \\
+    \texttt{is\_returning\_guest} & Kategorikal & 0 & Indikator apakah tamu pernah menginap sebelumnya \\
+    \texttt{prior\_cancellations} & Numerik & 0 & Jumlah pembatalan reservasi yang pernah dilakukan sebelumnya \\
+    \texttt{prior\_completed\_bookings} & Numerik & 0 & Jumlah pemesanan sukses sebelumnya oleh tamu yang sama \\
+    \texttt{nightly\_rate\_idr} & Numerik & 2.038 ($7{,}45\%$) & Tarif harga menginap per malam (dalam Rupiah) \\
+    \texttt{special\_requests} & Numerik & 2.500 ($9{,}13\%$) & Jumlah permintaan khusus yang diajukan tamu \\
+    \midrule
+    \texttt{is\_canceled} & Biner (Target) & 0 & Label target ($0 =$ Tidak Batal, $1 =$ Batal) \\
+    \bottomrule
+  \end{tabularx}
+\end{table}
+
+Karakteristik sebaran kuantitatif dari fitur-fitur numerik utama pada data latih disajikan pada Tabel~\ref{tab:statistik-fitur}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Statistik deskriptif fitur-fitur numerik utama pada data latih.}
+  \label{tab:statistik-fitur}
+  \footnotesize
+  \begin{tabular}{lrrrrr}
+    \toprule
+    \textbf{Fitur} & \textbf{Rerata} & \textbf{Standar Deviasi} & \textbf{Min} & \textbf{Median} & \textbf{Maks} \\
+    \midrule
+    \texttt{days\_before\_arrival} & 85,38 & 85,97 & 0 & 58 & 448 \\
+    \texttt{nightly\_rate\_idr} & 1.716.979,55 & 587.936,77 & 0 & 1.644.000 & 9.165.000 \\
+    \texttt{num\_adults} & 1,85 & 0,52 & 0 & 2 & 4 \\
+    \texttt{num\_children} & 0,12 & 0,43 & 0 & 0 & 10 \\
+    \texttt{weekend\_nights} & 0,81 & 0,88 & 0 & 1 & 7 \\
+    \texttt{weekday\_nights} & 2,21 & 1,42 & 0 & 2 & 17 \\
+    \texttt{special\_requests} & 0,67 & 0,80 & 0 & 0 & 5 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
 \subsection{Eksplorasi Data}
+
+Tahap eksplorasi data (\textit{Exploratory Data Analysis} / EDA) mengungkap beberapa karakteristik
+fundamental dataset yang divisualisasikan pada Gambar~\ref{fig:eda-overview} dan menjadi pedoman utama
+perancangan strategi prapemrosesan serta pemodelan:
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.98\linewidth]{assets/eda/eda-overview.png}
+  \caption{Ringkasan eksplorasi data: (kiri) proporsi ketidakseimbangan kelas target, (tengah) kurva kepadatan
+  \textit{lead time} terhadap pembatalan, (kanan) tingkat pembatalan berdasarkan jumlah permintaan khusus.}
+  \label{fig:eda-overview}
+\end{figure}
+
+\begin{enumerate}
+  \item \textbf{Ketidakseimbangan Distribusi Kelas}:
+        Sebagaimana tampak pada Gambar~\ref{fig:eda-overview} (kiri), rasio pembatalan kelas positif ($32{,}77\%$)
+        berbanding kelas negatif ($67{,}23\%$) menunjukkan kondisi ketidakseimbangan kelas moderat. Evaluasi model
+        tidak cukup hanya mengandalkan akurasi keseluruhan (\textit{overall accuracy}), melainkan menuntut penggunaan
+        metrik \textit{Macro-F1} dan \textit{F1-Score} kelas positif agar model tidak bias memprediksi kelas mayoritas semata.
+  \item \textbf{Korelasi Dominan terhadap Pembatalan}:
+        Analisis korelasi linear Pearson antara variabel numerik terhadap target \texttt{is\_canceled} menunjukkan
+        beberapa prediktor dengan pengaruh paling signifikan:
+        \begin{itemize}
+          \item \texttt{days\_before\_arrival} ($r = +0{,}4403$): Memiliki korelasi positif paling kuat.
+                Sebagaimana terlihat pada Gambar~\ref{fig:eda-overview} (tengah), distribusi pemesanan yang dibatalkan
+                memiliki ekor panjang ke kanan (\textit{right-skewed}) dengan median yang jauh lebih tinggi.
+                Pemesanan yang dilakukan jauh-jauh hari sebelum jadwal kedatangan memiliki probabilitas
+                pembatalan yang melonjak secara substansial.
+          \item \texttt{special\_requests} ($r = -0{,}2580$): Memiliki korelasi negatif paling kuat.
+                Gambar~\ref{fig:eda-overview} (kanan) menunjukkan bahwa reservasi tanpa permintaan khusus ($0$)
+                memiliki tingkat pembatalan tertinggi ($> 40\%$), sedangkan adanya satu atau lebih permintaan
+                khusus menurunkan tingkat pembatalan secara drastis hingga di bawah $20\%$. Tamu yang menyampaikan
+                preferensi khusus memiliki komitmen kehadiran yang jauh lebih tinggi.
+          \item \texttt{nightly\_rate\_idr} ($r = +0{,}1341$): Tarif harga kamar yang tinggi memiliki
+                kecenderungan risiko pembatalan yang lebih besar, kemungkinan karena tamu mencari alternatif
+                yang lebih terjangkau menjelang hari kedatangan.
+          \item \texttt{is\_returning\_guest} ($r = -0{,}1072$): Tamu berulang memiliki tingkat pembatalan
+                yang jauh lebih rendah karena loyalitas dan kepastian rencana perjalanan.
+        \end{itemize}
+  \item \textbf{Keberadaan Nilai Hilang (\textit{Missing Values})}:
+        Sebanyak 8 atribut memiliki data hilang dengan proporsi bervariasi antara $2{,}96\%$ hingga $11{,}09\%$.
+        Atribut \texttt{num\_children} ($11{,}09\%$), \texttt{special\_requests} ($9{,}13\%$), dan
+        \texttt{nightly\_rate\_idr} ($7{,}45\%$) memerlukan imputasi nilai yang cermat agar tidak
+        menimbulkan bias distribusi data.
+  \item \textbf{Pencilan (\textit{Outliers}) dan Anomali Logis}:
+        Ditemukan sejumlah kecil baris dengan anomali logis, seperti pemesanan dengan jumlah dewasa 0
+        (\texttt{num\_adults == 0}), total durasi menginap 0 malam (\texttt{weekend\_nights + weekday\_nights == 0}),
+        harga per malam bernilai nol atau negatif, serta tanggal yang tidak valid (misal 29 Februari pada tahun non-kabisat).
+        Hal ini menegaskan pentingnya pembersihan data awal sebelum proses pelatihan model.
+\end{enumerate}
