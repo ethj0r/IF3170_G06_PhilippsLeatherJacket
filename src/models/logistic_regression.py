@@ -209,7 +209,6 @@ class LogisticRegression(BaseModel):
                 return True
         return False
 
-    # ===== SGA Training Loop =====
     def _fit_sga(self, X_bias: np.ndarray, y_bin: np.ndarray) -> None:
         """Train using Stochastic Gradient Ascent."""
         n_samples = X_bias.shape[0]
@@ -228,7 +227,6 @@ class LogisticRegression(BaseModel):
             if self._record_epoch(epoch, X_bias, y_bin):
                 break
 
-    # ===== Mini-Batch Adam Training Loop =====
     def _fit_adam(self, X_bias: np.ndarray, y_bin: np.ndarray) -> None:
         """Train using mini-batch Adam optimizer."""
         n_samples, n_params = X_bias.shape
@@ -265,7 +263,6 @@ class LogisticRegression(BaseModel):
         """Fit binary Logistic Regression model using SGA or mini-batch Adam."""
         self._validate_hyperparameters()
 
-        # ===== Input Validation =====
         X_arr = np.asarray(X, dtype=np.float64)
         y_arr = np.asarray(y).ravel()
         if X_arr.ndim != 2:
@@ -280,7 +277,6 @@ class LogisticRegression(BaseModel):
         y_bin = (y_arr == self.classes_[1]).astype(np.float64)
         X_bias = self._add_intercept(X_arr)
 
-        # ===== Initialization =====
         self.b_ = np.zeros(X_bias.shape[1], dtype=np.float64)
         self.lcl_history_ = []
         self.loss_history_ = []
@@ -306,7 +302,6 @@ class LogisticRegression(BaseModel):
         pred_indices = (p_pos >= self.threshold).astype(int)
         return self.classes_[pred_indices]
 
-    # ===== Serialization =====
     def save(self, filepath: str | Path) -> None:
         """Save the fitted model instance to disk using joblib or pickle fallback."""
         if self.b_ is None:
