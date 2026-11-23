@@ -168,7 +168,6 @@ class KNN(BaseModel):
                 probs.append(counts / self.k)
 
         return np.vstack(probs)
-
     def _predict(self, x: np.ndarray) -> object:
         """Predict the class label for a single sample (reference helper)."""
         if self.metric == "hamming":
