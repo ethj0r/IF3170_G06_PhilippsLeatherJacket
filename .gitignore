@@ -1,4 +1,17 @@
-.venv
+# Environments
+.venv/
+env/
+venv/
+
+# Bytecode & Caches
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+
+# Jupyter Checkpoints
 .ipynb_checkpoints/
+
+# macOS / Windows OS files
+.DS_Store
+Thumbs.db
