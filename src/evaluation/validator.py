@@ -112,9 +112,16 @@ def cross_validate_configs(
             X_fold_train, X_fold_val = X_tr[train_idx], X_tr[val_idx]
             y_fold_train, y_fold_val = y_tr[train_idx], y_tr[val_idx]
 
-            model = model_cls(**cfg)
+            cfg_model = {k: v for k, v in cfg.items() if k != "prob_thres"}
+            model = model_cls(**cfg_model)
             model.fit(X_fold_train, y_fold_train)
-            y_pred_fold = model.predict(X_fold_val)
+
+            prob_thres = cfg.get("prob_thres")
+            if prob_thres is not None and hasattr(model, "predict_proba"):
+                y_pred_fold_std = model.predict_proba(X_fold_val)[:, 1]
+                y_pred_fold = (y_pred_fold_std >= prob_thres).astype(int)
+            else:
+                y_pred_fold = model.predict(X_fold_val)
 
             fold_accuracies.append(float(accuracy_score(y_fold_val, y_pred_fold)))
             fold_f1_scores.append(float(f1_score(y_fold_val, y_pred_fold, average="macro")))
@@ -153,12 +160,27 @@ def train_and_evaluate(
     model_name: str = "Model",
     config: dict[str, Any] | None = None,
     X_test: np.ndarray | None = None,
+    fit_orig_only: bool = True,
     plot_cm: bool = True,
     verbose: bool = True,
 ) -> dict[str, Any]:
-    """Train model on split_data.X_tr and evaluate strictly on original validation rows."""
-    model.fit(split_data.X_tr, split_data.y_tr)
-    val_preds = model.predict(split_data.X_val)
+    """Train model and evaluate strictly on original validation rows.
+
+    If fit_orig_only is True and orig_tr mask is available, the model is fitted
+    strictly on genuine training samples (excluding SMOTE synthetic samples)
+    to prevent distribution skew during testing/evaluation.
+    """
+    if fit_orig_only and split_data.orig_tr is not None:
+        model.fit(split_data.X_tr[split_data.orig_tr], split_data.y_tr[split_data.orig_tr])
+    else:
+        model.fit(split_data.X_tr, split_data.y_tr)
+
+    prob_thres = config.get("prob_thres") if config else None
+    if prob_thres is not None and hasattr(model, "predict_proba"):
+        val_probs = model.predict_proba(split_data.X_val)[:, 1]
+        val_preds = (val_probs >= prob_thres).astype(int)
+    else:
+        val_preds = model.predict(split_data.X_val)
 
     mask = split_data.orig_val
     y_true_orig = split_data.y_val[mask]

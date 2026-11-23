@@ -38,16 +38,25 @@ def generate_submission(
     test_ids: pd.Series | np.ndarray,
     sample_submission: pd.DataFrame,
     output_csv_path: str | Path,
+    prob_threshold: float | None = None,
     random_state: int = 824,
     verbose: bool = True,
 ) -> pd.DataFrame:
-    """Run predictions on test features, validate Kaggle submission format, and save CSV."""
+    """Run predictions on test features, validate Kaggle submission format, and save CSV.
+
+    If prob_threshold is provided and model implements predict_proba, binary predictions
+    are computed with the specified threshold.
+    """
     np.random.seed(random_state)
 
     if verbose:
         print("Melakukan prediksi pada data test...")
 
-    test_predictions = model.predict(X_test)
+    if prob_threshold is not None and hasattr(model, "predict_proba"):
+        test_probs = model.predict_proba(X_test)[:, 1]
+        test_predictions = (test_probs >= prob_threshold).astype(int)
+    else:
+        test_predictions = model.predict(X_test)
     submission = pd.DataFrame(
         {
             "id": test_ids,

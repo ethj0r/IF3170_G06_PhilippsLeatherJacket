@@ -18,16 +18,14 @@ else:
     from ..preprocess.config import DEFAULT_RANDOM_STATE, PreprocessingConfig
 
 SUPPORTED_METRICS = {"euclidean", "manhattan", "minkowski", "hamming"}
+SUPPORTED_WEIGHTS = {"uniform", "inverted"}
 
 DEFAULT_KNN_CONFIGS: list[dict[str, object]] = [
-    {"k": 5, "metric": "euclidean", "p": 2},
-    {"k": 5, "metric": "manhattan", "p": 1},
-    {"k": 5, "metric": "minkowski", "p": 5},
-    {"k": 5, "metric": "hamming", "p": 2},
-    {"k": 10, "metric": "euclidean", "p": 2},
-    {"k": 10, "metric": "manhattan", "p": 1},
-    {"k": 10, "metric": "minkowski", "p": 5},
-    {"k": 10, "metric": "hamming", "p": 2},
+    {"k": 5, "metric": "euclidean", "p": 2, "weights": "uniform", "prob_thres": 0.45},
+    {"k": 5, "metric": "euclidean", "p": 2, "weights": "inverted", "prob_thres": 0.45},
+    {"k": 3, "metric": "euclidean", "p": 2, "weights": "uniform", "prob_thres": 0.45},
+    {"k": 3, "metric": "euclidean", "p": 2, "weights": "inverted", "prob_thres": 0.45},
+    {"k": 5, "metric": "manhattan", "p": 1, "weights": "inverted", "prob_thres": 0.45},
 ]
 
 
@@ -58,6 +56,7 @@ class KNN(BaseModel):
         metric: str = "minkowski",
         p: int = 2,
         batch_size: int = 256,
+        weights: str = "uniform",
     ) -> None:
         if k <= 0:
             raise ValueError(f"k must be a positive integer, got {k}.")
@@ -67,10 +66,15 @@ class KNN(BaseModel):
             )
         if batch_size <= 0:
             raise ValueError(f"batch_size must be a positive integer, got {batch_size}.")
+        if weights not in SUPPORTED_WEIGHTS:
+            raise ValueError(
+                f"Unsupported weights '{weights}'. Expected one of {sorted(SUPPORTED_WEIGHTS)}."
+            )
 
         self.k = k
         self.metric = metric
         self.batch_size = batch_size
+        self.weights = weights
         if self.metric == "manhattan":
             self.p = 1
         elif self.metric == "euclidean":
@@ -125,11 +129,45 @@ class KNN(BaseModel):
             idx = np.argpartition(D, self.k - 1, axis=1)[:, : self.k]
             labels = self.y_train_[idx]
 
-            counts = np.stack([(labels == c).sum(axis=1) for c in self.classes_], axis=1)
-            preds.append(self.classes_[np.argmax(counts, axis=1)])
+            if self.weights == "inverted":
+                k_dist = np.take_along_axis(D, idx, axis=1)
+                w = 1.0 / (k_dist + 1e-5)
+                scores = np.stack([(w * (labels == c)).sum(axis=1) for c in self.classes_], axis=1)
+                preds.append(self.classes_[np.argmax(scores, axis=1)])
+            else:
+                counts = np.stack([(labels == c).sum(axis=1) for c in self.classes_], axis=1)
+                preds.append(self.classes_[np.argmax(counts, axis=1)])
 
         return np.concatenate(preds)
 
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Predict class probabilities for X in memory-bounded batches."""
+        if not hasattr(self, "X_train_") or not hasattr(self, "y_train_"):
+            raise RuntimeError("KNN model must be fitted before calling predict_proba().")
+
+        X_arr = np.asarray(X, dtype=float)
+        if X_arr.shape[0] == 0:
+            return np.empty((0, len(self.classes_)), dtype=float)
+
+        probs = []
+        for start in range(0, X_arr.shape[0], self.batch_size):
+            Xb = X_arr[start : start + self.batch_size]
+            D = self._distances(Xb)
+
+            idx = np.argpartition(D, self.k - 1, axis=1)[:, : self.k]
+            labels = self.y_train_[idx]
+
+            if self.weights == "inverted":
+                k_dist = np.take_along_axis(D, idx, axis=1)
+                w = 1.0 / (k_dist + 1e-5)
+                total_w = w.sum(axis=1, keepdims=True)
+                scores = np.stack([(w * (labels == c)).sum(axis=1) for c in self.classes_], axis=1)
+                probs.append(scores / total_w)
+            else:
+                counts = np.stack([(labels == c).sum(axis=1) for c in self.classes_], axis=1)
+                probs.append(counts / self.k)
+
+        return np.vstack(probs)
     def _predict(self, x: np.ndarray) -> object:
         """Predict the class label for a single sample (reference helper)."""
         if self.metric == "hamming":
