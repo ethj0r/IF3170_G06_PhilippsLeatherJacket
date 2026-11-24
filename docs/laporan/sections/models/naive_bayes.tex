@@ -32,11 +32,9 @@ positif. Prior kelas tidak diberi smoothing (opsi $9/14$ pada contoh
 \textit{Play Tennis} di materi kuliah) karena kedua kelas memiliki ribuan data.
 
 \subsubsection{Implementasi}
-Implementasi terdapat pada \texttt{src/models/naive\_bayes.py} dan
-\texttt{src/preprocess/nb\_features.py}. Seluruh perhitungan model hanya
-menggunakan NumPy. Notebook utama Naive Bayes adalah
-\texttt{notebooks/naive\_bayes\_experiment.ipynb}. Notebook ini memuat seluruh
-eksperimen, perbandingan dengan scikit-learn, kedua bonus, dan pembuatan file
+Model dan pembuatan fitur Naive Bayes diimplementasikan dari awal, dan
+perhitungan model hanya menggunakan NumPy. Eksperimen dijalankan pada satu notebook
+khusus Naive Bayes yang memuat seluruh eksperimen, perbandingan dengan scikit-learn, kedua bonus, dan pembuatan file
 submisi. Semua angka dan gambar pada bagian ini berasal dari notebook tersebut, dan
 menjalankannya ulang menghasilkan file submisi yang identik.
 
@@ -95,7 +93,7 @@ model hasil \texttt{load} identik dengan model sebelum disimpan.
 bobot pada setiap atribut. Kelas ini dibahas pada bagian bonus optimasi.
 \texttt{WideNaiveBayes} membungkus pembuatan fitur \texttt{WideFeatures} dan
 \texttt{WeightedNaiveBayes} dalam satu objek agar dapat dipakai pada
-\texttt{main.ipynb} dengan antarmuka yang sama seperti model lain.
+notebook utama dengan antarmuka yang sama seperti model lain.
 
 \subsubsection{Preprocessing Khusus Naive Bayes}
 Naive Bayes tidak memakai hasil preprocessing bersama (one-hot, scaling, SMOTE,
@@ -339,9 +337,9 @@ terlalu yakin. Gambar~\ref{fig:nb-weights} memperlihatkan bahwa bobot hasil
 pelatihan jauh dari 1 (rata-rata $-0{,}0006$), dan sebagian bobot bernilai negatif.
 Artinya, informasi atribut tersebut sudah diwakili atribut lain sehingga
 pengaruhnya dikoreksi. Model akhir dilatih ulang pada seluruh data latih dan
-menghasilkan \texttt{output/submission\_wnb.csv} dengan public score 0,85167.
+menghasilkan file submisi dengan public score 0,85167.
 Model ini merupakan submisi Naive Bayes yang sesuai spesifikasi. Untuk perbandingan
-antarmodel, \texttt{main.ipynb} memakai kelas \texttt{WideNaiveBayes} yang sama
+antarmodel, notebook utama memakai kelas \texttt{WideNaiveBayes} yang sama
 pada split 85/15 milik pipeline bersama. Pada split tersebut, CV memilih
 $\lambda = 30$ dengan akurasi validasi 0,8624. Selisih ini hanya berasal dari
 pembagian data yang berbeda.
