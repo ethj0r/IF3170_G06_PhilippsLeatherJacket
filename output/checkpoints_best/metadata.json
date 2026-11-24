@@ -20,6 +20,6 @@
     "samples": 15000,
     "seed": 824
   },
-  "source": "scripts/train_final_scratch.py",
+  "source": "notebooks/svm_experiment.ipynb",
   "notes": "single from-scratch SVM, engineered features only; public score 0.86363"
 }

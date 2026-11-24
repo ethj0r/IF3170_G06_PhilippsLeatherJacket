@@ -318,8 +318,8 @@ varian tersebut hanya dipakai sebagai eksperimen, bukan submisi SVM murni.
 
 \begin{table}[htbp]
   \centering
-  \caption{Ringkasan konfigurasi SVM final dan performanya. Skor publik adalah
-  akurasi pada data uji Kaggle.}
+  \caption{Ringkasan konfigurasi SVM final dan performanya beserta skor publik
+  pada data uji Kaggle.}
   \label{tab:svm-final}
   \footnotesize
   \resizebox{\textwidth}{!}{%
@@ -338,15 +338,17 @@ varian tersebut hanya dipakai sebagai eksperimen, bukan submisi SVM murni.
 \end{table}
 
 \paragraph{Reproduksibilitas.}
-Seluruh eksperimen dapat dijalankan ulang melalui empat skrip utama:
-\texttt{scripts/run\_svm\_experiments.py} untuk perbandingan tiga kernel,
-\texttt{scripts/train\_final\_scratch.py} untuk model murni SVM,
-\texttt{scripts/train\_final\_compliant\_svm.py} untuk varian \textit{compliant},
-dan \texttt{scripts/train\_single\_knn\_svm.py} untuk varian fitur KNN. Setiap
-skrip mencetak metrik validasi dan waktu latih ke keluaran standar, lalu
-menuliskan model serta berkas submisi ke direktori \texttt{output/}. Pengujian
-unit untuk kernel, solver, dan serialisasi dapat dijalankan dengan
-\texttt{python -m unittest tests.test\_svm}.
+Seluruh eksperimen dan submisi SVM dapat dijalankan ulang melalui
+\texttt{notebooks/svm\_experiment.ipynb} serta integrasi pada
+\texttt{main.ipynb} menggunakan fungsi-fungsi di paket \texttt{src/svm/}
+(\texttt{run\_comparison} pada \texttt{src/svm/experiment.py} untuk perbandingan
+ketiga kernel terhadap \texttt{scikit-learn}, \texttt{plot\_2d\_decision\_boundary}
+pada \texttt{src/svm/visualize.py} untuk visualisasi bidang pemisah 2D, dan
+\texttt{load\_engineered\_final} pada \texttt{src/svm/data.py} bersama
+\textit{checkpoint} \texttt{output/checkpoints\_best/svm\_scratch\_0.86363.pkl}
+untuk mereproduksi persis berkas \texttt{submission\_svm\_0.86363.csv}). Pengujian
+unit untuk kernel, solver, fitur, dan serialisasi dapat dijalankan dengan
+\texttt{python -m unittest discover -s tests}.
 
 \paragraph{Analisis beban komputasi.}
 Kompleksitas waktu SVM bergantung pada jumlah baris latih $n$ dan jumlah

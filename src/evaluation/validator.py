@@ -198,14 +198,22 @@ def train_and_evaluate(
 
     if plot_cm:
         import matplotlib.pyplot as plt
-        import seaborn as sns
 
-        plt.figure(figsize=(6, 4))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
         cfg_label = f": {config}" if config else ""
-        plt.title(f"Confusion Matrix ({model_name}{cfg_label})")
-        plt.xlabel("Predicted Label")
-        plt.ylabel("True Label")
+        try:
+            import seaborn as sns
+
+            plt.figure(figsize=(6, 4))
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+            plt.title(f"Confusion Matrix ({model_name}{cfg_label})")
+            plt.xlabel("Predicted Label")
+            plt.ylabel("True Label")
+        except ImportError:
+            from sklearn.metrics import ConfusionMatrixDisplay
+
+            fig, ax = plt.subplots(figsize=(6, 4))
+            ConfusionMatrixDisplay(confusion_matrix=cm).plot(ax=ax, cmap="Blues", colorbar=True)
+            ax.set_title(f"Confusion Matrix ({model_name}{cfg_label})")
         plt.show()
 
     return {

@@ -1,1 +1,53 @@
 \section{Kesimpulan dan Saran}
+\sloppy
+
+\subsection{Kesimpulan}
+
+Lima algoritma pembelajaran mesin terbimbing, yaitu \textit{k}-Nearest Neighbors (KNN),
+Decision Tree Learning (C4.5), Logistic Regression (dengan regularisasi L1, L2, dan
+Elastic Net), Support Vector Machine (SVM dengan kernel Linear, Polynomial, dan Gaussian/RBF),
+serta Bayesian Network (Naive Bayes dan Weighted Naive Bayes), berhasil diimplementasikan
+\textit{from scratch} menggunakan NumPy dan dievaluasi pada persoalan prediksi pembatalan
+reservasi penginapan (27.373 baris latih dan 6.844 baris uji).
+
+\begin{enumerate}
+  \item \textbf{Validitas implementasi \textit{from scratch}}: Perbandingan terkontrol terhadap
+        \texttt{scikit-learn} menunjukkan kesepakatan prediksi $100\%$ pada KNN, Naive Bayes,
+        dan SVM RBF, kesepakatan $97{,}35\%$ pada Logistic Regression (\textit{cosine similarity}
+        vektor bobot $0{,}99743$), serta keunggulan $+0{,}66$ poin persentase Macro-F1 pada C4.5 v4
+        dibandingkan \texttt{DecisionTreeClassifier} berkat pembagian bobot proporsional untuk nilai kosong.
+  \item \textbf{Perbandingan performa antarmodel}: Model non-linear dan model dengan interaksi fitur
+        eksplisit memberikan kinerja terbaik. Pada validasi bersama $85:15$, Weighted Naive Bayes mencapai
+        Macro-F1 tertinggi ($0{,}84169$; akurasi $0{,}86240$), disusul tipis oleh SVM RBF ($0{,}83911$;
+        akurasi tertinggi $0{,}86324$) dan C4.5 v4 ($0{,}83765$; akurasi $0{,}85704$), sedangkan KNN
+        ($0{,}79476$) dan Logistic Regression ($0{,}72441$) tertinggal karena keterbatasan jarak ruang
+        PCA dan pemisah linear. Pada papan peringkat publik Kaggle, model tunggal SVM RBF memberikan
+        skor tertinggi kelompok sebesar \textbf{0,86363}, diikuti Weighted Naive Bayes (\textbf{0,85167})
+        dan C4.5 v4 (\textbf{0,84191}).
+  \item \textbf{Dampak prapemrosesan dan algoritma optimasi}: Penyesuaian prapemrosesan terhadap
+        karakteristik tiap model (diskritisasi MDL untuk Naive Bayes, pemertahanan kategori dan indikator
+        nilai kosong untuk C4.5, serta rekayasa fitur dan penskalaan \textit{robust} untuk SVM) terbukti
+        jauh lebih menentukan daripada penyetelan hiperparameter semata. Selain itu, tiga algoritma
+        optimasi tambahan di luar materi kelas (mini-batch Adam pada Logistic Regression yang $\sim 25\times$
+        lebih cepat dari SGA, solver SMO orde kedua ber-\textit{cache} LRU pada SVM, serta optimasi bobot
+        Newton L2 pada Weighted Naive Bayes dengan kenaikan $+4{,}23$ poin persentase Macro-F1 di atas
+        Naive Bayes biasa) secara nyata meningkatkan efisiensi maupun akurasi model.
+\end{enumerate}
+
+\subsection{Saran}
+
+\begin{enumerate}
+  \item \textbf{Klasifikasi peka biaya (\textit{cost-sensitive classification})}: Dalam operasional
+        penginapan, kesalahan prediksi yang menyebabkan \textit{overbooking} (\textit{false positive} pada
+        prediksi pembatalan) umumnya lebih merugikan daripada kamar kosong. Pengembangan selanjutnya
+        dapat menyesuaikan matriks biaya asimetris secara langsung pada ambang keputusan Bayes
+        ($\theta^* = c_{\text{FP}} / (c_{\text{FP}} + c_{\text{FN}})$) maupun bobot penalti per kelas
+        ($C_+$ dan $C_-$ pada SVM atau bobot \textit{log-loss} pada Logistic Regression).
+  \item \textbf{Skalabilitas pelatihan SVM penuh}: Pendekatan aproksimasi fitur kernel seperti
+        \textit{Random Fourier Features} atau metode dekomposisi paralel dapat diterapkan agar pelatihan
+        SVM RBF pada seluruh 27.373 baris data latih berlangsung lebih ringan tanpa membatasi ukuran subset.
+  \item \textbf{Post-pruning pada C4.5 dan kalibrasi probabilitas}: Penambahan tahap \textit{rule
+        post-pruning} pada C4.5 serta kalibrasi probabilitas Platt/isotonik pada skor keputusan SVM
+        dapat dikaji lebih lanjut untuk memperbaiki keterbacaan aturan dan kualitas estimasi probabilitas.
+\end{enumerate}
+\fussy

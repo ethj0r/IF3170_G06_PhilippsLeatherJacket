@@ -1,5 +1,8 @@
 """Binary SVM trained with SMO."""
 
+from pathlib import Path
+
+import joblib
 import numpy as np
 
 from .kernels import kernel_matrix, resolve_gamma
@@ -150,6 +153,19 @@ class SVM:
 
     def score(self, X, y):
         return float(np.mean(self.predict(X) == np.asarray(y).ravel()))
+
+    def save(self, filepath):
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self, path)
+        return path
+
+    @classmethod
+    def load(cls, filepath):
+        loaded = joblib.load(Path(filepath))
+        if not isinstance(loaded, cls):
+            raise TypeError(f"Loaded object is {type(loaded).__name__}, expected {cls.__name__}.")
+        return loaded
 
     def __repr__(self):
         if hasattr(self, "support_vectors_"):

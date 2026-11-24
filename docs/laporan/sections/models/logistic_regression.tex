@@ -37,8 +37,8 @@ PCA agar skala fitur seragam dan gradien tetap stabil.
 Komponen utama di dalam kelas \texttt{LogisticRegression} meliputi:
 \begin{itemize}
   \item \texttt{\_sigmoid}, \texttt{\_add\_intercept}, \texttt{log\_odds},
-        \texttt{\_compute\_lcl}, \texttt{\_compute\_penalty}, dan
-        \texttt{\_regularization\_grad}: melakukan pemotongan numerik
+        \texttt{\_compute\_lcl}, \texttt{\_compute\_penalty}, serta
+        \texttt{\_regularization\_\allowbreak grad}: melakukan pemotongan numerik
         (\textit{clipping}) pada logit $[-500, 500]$ dan probabilitas
         $[10^{-15}, 1 - 10^{-15}]$ untuk mencegah \textit{overflow}/\texttt{log(0)},
         serta menghitung nilai dan turunan penalti L1, L2, dan Elastic Net.
@@ -55,18 +55,6 @@ Komponen utama di dalam kelas \texttt{LogisticRegression} meliputi:
         mendukung serialisasi berbasis \texttt{joblib} (dengan cadangan
         \texttt{pickle}).
 \end{itemize}
-
-Pada SGA, pembaruan dilakukan secara sekuensial per sampel ($\tilde{x}_i$),
-sehingga lintasan gradien cenderung berosilasi dan membutuhkan iterasi baris
-dalam Python. Sebaliknya, \textbf{Adam} (\textit{Adaptive Moment Estimation})
-mengoptimasi proses pelatihan lewat empat mekanisme (Kingma dan Ba, 2015):
-(1) menghitung gradien secara vektorisasi per \textit{mini-batch} berukuran 256;
-(2) mempertahankan momentum orde pertama $m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t$
-($\beta_1 = 0{,}9$) agar arah pembaruan lebih halus; (3) mempertahankan estimasi
-variansi gradien orde kedua $v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2$
-($\beta_2 = 0{,}999$) untuk menyesuaikan ukuran langkah adaptif tiap parameter; dan
-(4) menerapkan koreksi bias $\hat{m}_t, \hat{v}_t$ sehingga konvergensi awal
-lebih stabil tanpa menuntut penyetelan \textit{learning rate} yang ketat.
 
 \begin{lstlisting}
 def _regularization_grad(self):
@@ -104,6 +92,23 @@ def _fit_adam(self, X_bias, y_bin):
         v_hat = v / (1.0 - self.beta2 ** t_step)
         self.b_ -= self.learning_rate * m_hat / (np.sqrt(v_hat) + self.eps)
 \end{lstlisting}
+
+\subsubsection{Algoritma Optimasi Model (Bonus): Mini-Batch Adam}
+
+Selain \textit{Stochastic Gradient Ascent} (SGA) yang diajarkan di kelas (Khodra, 2021),
+kami mengimplementasikan \textbf{mini-batch Adam} (\textit{Adaptive Moment Estimation};
+Kingma dan Ba, 2015) pada metode \texttt{\_fit\_adam}. Pada SGA, pembaruan bobot dilakukan
+secara sekuensial per sampel ($\tilde{x}_i$), sehingga lintasan gradien cenderung berosilasi
+dan membutuhkan perulangan baris dalam Python. Sebaliknya, Adam mengoptimasi proses
+pelatihan melalui empat mekanisme:
+(1) menghitung gradien secara vektorisasi per \textit{mini-batch} berukuran 256;
+(2) mempertahankan momentum orde pertama $m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t$
+($\beta_1 = 0{,}9$) agar arah pembaruan lebih halus; (3) mempertahankan estimasi
+variansi gradien orde kedua $v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2$
+($\beta_2 = 0{,}999$) untuk menyesuaikan ukuran langkah adaptif tiap parameter; dan
+(4) menerapkan koreksi bias $\hat{m}_t = m_t / (1 - \beta_1^t)$ serta
+$\hat{v}_t = v_t / (1 - \beta_2^t)$ sehingga konvergensi awal lebih stabil tanpa
+menuntut penyetelan \textit{learning rate} yang sensitif.
 
 \subsubsection{Hasil dan Perbandingan dengan scikit-learn}
 

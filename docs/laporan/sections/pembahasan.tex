@@ -157,12 +157,90 @@ ilusi performa tinggi padahal model mengabaikan kelas minoritas. Oleh sebab itu,
 
 \input{sections/models/knn}
 \input{sections/models/dtl}
+\clearpage
 \input{sections/models/logistic_regression}
 \input{sections/models/svm}
 \input{sections/models/naive_bayes}
 
 \subsection{Perbandingan Hasil Antar Model}
 
+Kelima model \textit{from scratch} dievaluasi secara terpadu pada \texttt{main.ipynb}
+menggunakan pembagian terstratifikasi $85:15$ (\texttt{random\_state=824}) dengan metrik yang
+hanya dihitung pada baris validasi data asli (tanpa sampel sintetis SMOTE). Ringkasan hasil
+validasi pada skema bersama tersebut beserta kesepakatan prediksi terhadap \texttt{scikit-learn}
+dan skor publik Kaggle disajikan pada Tabel~\ref{tab:perbandingan-model}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Ringkasan performa kelima model \textit{from scratch} pada validasi $85:15$
+  (\texttt{random\_state=824}), kesepakatan dengan \texttt{scikit-learn}, dan skor publik Kaggle.}
+  \label{tab:perbandingan-model}
+  \footnotesize
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{@{}llcccccc@{}}
+    \toprule
+    \textbf{Model (\textit{From Scratch})} & \textbf{Representasi Fitur} & \textbf{Akurasi} & \textbf{Presisi (1)} & \textbf{Recall (1)} & \textbf{Macro-F1} & \textbf{Vs.\ sklearn} & \textbf{Publik Kaggle} \\
+    \midrule
+    SVM RBF ($C=20$, th $=0{,}0695$) & 89 fitur rekayasa (\textit{robust}) & \textbf{0,86324} & \textbf{0,83707} & 0,72463 & 0,83911 & 100,00\%$^{*}$ & \textbf{0,86363} \\
+    Weighted Naive Bayes ($\alpha=0{,}3, \lambda=30$) & 1.239 atribut diskrit/gabungan & 0,86240 & 0,80564 & 0,76431 & \textbf{0,84169} & 100,00\%$^{\dagger}$ & 0,85167 \\
+    DTL C4.5 v4 ($\text{depth}=16$, th $=0{,}48$) & 29 atribut campuran + indikator & 0,85704 & 0,78241 & \textbf{0,78067} & 0,83765 & $+0{,}0066$ F1$^{\ddagger}$ & 0,84191 \\
+    KNN ($k=5$, Manhattan, \textit{inverted}) & 9 komponen PCA (95\% varians) & 0,81892 & 0,72409 & 0,72463 & 0,79476 & 100,00\% & -- \\
+    Logistic Regression (SGA, 20 \textit{epoch}) & 9 komponen PCA (95\% varians) & 0,77922 & 0,73833 & 0,50746 & 0,72441 & 97,35\% & -- \\
+    \bottomrule
+  \end{tabular}}
+  \par\vspace{2pt}
+  {\scriptsize $^{*}$kesepakatan tanda skor keputusan SVM RBF vs \texttt{SVC} pada subset uji kernel;
+  $^{\dagger}$kesepakatan prediksi \texttt{NaiveBayes} vs \texttt{CategoricalNB};
+  $^{\ddagger}$selisih Macro-F1 C4.5 v4 di atas \texttt{DecisionTreeClassifier} pada validasi $80:20$.}
+\end{table}
+
+Berdasarkan Tabel~\ref{tab:perbandingan-model}, tiga model teratas (SVM RBF, Weighted Naive Bayes,
+dan C4.5) melampaui akurasi $85{,}7\%$ dan Macro-F1 $0{,}837$, sedangkan KNN berada di tingkat menengah
+($0{,}79476$) dan Logistic Regression paling rendah ($0{,}72441$). Pola ini dapat dijelaskan oleh dua faktor utama:
+\begin{enumerate}
+  \item \textbf{Kapasitas menangkap interaksi non-linear}: Pembatalan pemesanan sangat bergantung pada
+        interaksi antarfitur (misalnya kombinasi \textit{lead time}, kanal distribusi, tanggal kedatangan,
+        serta ketiadaan permintaan khusus). Kernel RBF pada SVM, pencabangan bertingkat pada C4.5, dan
+        kombinasi atribut orde tinggi yang diboboti secara diskriminatif pada Weighted Naive Bayes mampu
+        memodelkan batas keputusan non-linear tersebut. Sebaliknya, Logistic Regression hanya membentuk satu
+        bidang pemisah linear di ruang PCA sehingga bersifat konservatif pada kelas batal (\textit{recall} $0{,}507$).
+  \item \textbf{Kesesuaian representasi fitur terhadap sifat algoritma}: Reduksi dimensi ke 9 komponen PCA
+        efektif meringankan komputasi jarak KNN, tetapi proyeksi linear dari fitur \textit{one-hot}
+        mengaburkan batas diskrit kategori dan merusak asumsi distribusi Naive Bayes. Pemisahan
+        rekayasa fitur khusus untuk DTL, Naive Bayes, dan SVM terbukti memberikan kenaikan paling besar
+        dibandingkan sekadar mengganti hiperparameter pada fitur mentah.
+\end{enumerate}
+
+Dari sisi validasi terhadap pustaka referensi \texttt{scikit-learn}, kelima implementasi
+\textit{from scratch} menunjukkan kesesuaian yang konsisten: KNN, Naive Bayes kategorikal, dan SVM RBF
+mencapai kesepakatan prediksi hingga $100\%$ pada konfigurasi pembanding yang setara, Logistic Regression
+mencapai kesepakatan $97{,}35\%$ (\textit{cosine similarity} bobot $0{,}99743$), dan C4.5 sedikit mengungguli
+\texttt{DecisionTreeClassifier} berpruning \texttt{ccp\_alpha} berkat penanganan nilai kosong proporsional
+secara langsung tanpa imputasi kasar.
+
 \subsection{Penyimpanan Model dan Submisi Kaggle}
 
-% Tambahkan pembahasan bonus yang dikerjakan, jika ada.
+Seluruh model mendukung penyimpanan ke berkas biner dan pemuatan kembali (\textit{save} dan \textit{load})
+menggunakan \texttt{joblib} (dengan cadangan \texttt{pickle} pada \texttt{LogisticRegression}), baik melalui
+metode \texttt{save()}/\texttt{load()} pada kelas model maupun fungsi bersama \texttt{save\_and\_verify\_model()}
+pada \texttt{src/evaluation/submission.py}. Pada setiap notebook eksperimen dan \texttt{main.ipynb},
+dilakukan pengujian \textit{round-trip} untuk memastikan keluaran \texttt{predict()} dari objek hasil
+\texttt{load} sama persis dengan objek sebelum disimpan.
+
+Pembuatan berkas submisi dilakukan melalui \texttt{generate\_submission()} yang memeriksa secara otomatis
+tiga syarat format kompetisi terhadap \texttt{data/sample\_submission.csv}: jumlah baris tepat 6.844,
+urutan serta nama kolom \texttt{id} dan \texttt{is\_canceled} sesuai templat, dan tidak terdapat nilai
+\texttt{NaN}. Rincian berkas model dan submisi yang dihasilkan di folder \texttt{output/} adalah:
+\begin{itemize}
+  \item \textbf{SVM}: \path{output/checkpoints_best/svm_scratch_0.86363.pkl} dan
+        \path{output/submission_svm_best_public.csv} (2.021 prediksi kelas 1; skor publik terbaik \textbf{0,86363}).
+  \item \textbf{Naive Bayes}: \path{output/naive_bayes.pkl}, \path{output/submission_naive_bayes.csv},
+        serta \path{output/submission_wnb.csv} dari Weighted Naive Bayes (2.067 prediksi kelas 1; skor publik \textbf{0,85167}).
+  \item \textbf{DTL (C4.5)}: \path{output/dtl.pkl} dan \path{output/submission_dtl_v4.csv}
+        (2.135 prediksi kelas 1; skor publik \textbf{0,84191}).
+  \item \textbf{KNN}: \path{output/knn.pkl} dan \path{output/submission_knn.csv} (2.003 prediksi kelas 1).
+  \item \textbf{Logistic Regression}: \path{output/logreg.pkl} dan \path{output/submission_logreg.csv}
+        (1.576 prediksi kelas 1).
+\end{itemize}
+Seluruh submisi yang diunggah ke Kaggle berasal murni dari satu model \textit{from scratch} tunggal tanpa
+\textit{ensemble} dan tanpa penggabungan statistik data latih dengan data uji.

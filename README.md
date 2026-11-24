@@ -1,121 +1,91 @@
-# IF3170_G06_PhilippsLeatherJacket
+# IF3170 Tugas Besar 2 — Prediksi Pembatalan Reservasi Penginapan (Supervised Learning)
 
-Proyek ini mengimplementasikan pipeline klasifikasi *machine learning* untuk Tugas Besar 2 IF3170 Inteligensi Artifisial.  
-Proyek ini mendukung dua mode penggunaan:
-1. **Notebook Mandiri (*Self-Contained*) di `notebooks/`**: Setiap notebook dapat dijalankan langsung dari atas sampai bawah hanya dengan membaca file dari folder `data/` tanpa bergantung pada file/modul di `src/`.
-2. **Arsitektur Modular di `src/` & `main.ipynb`**: Pipeline modular yang bersih untuk integrasi dan perbandingan seluruh model klasifikasi sekaligus.
+Repositori kelompok **G06 — PhilippsLeatherJacket** untuk Tugas Besar 2 IF3170 Inteligensi Artifisial Semester I 2026/2027.
 
----
+## Deskripsi Singkat
 
-## 📁 Struktur Direktori
+Program ini menyelesaikan permasalahan prediksi pembatalan reservasi penginapan (`is_canceled`) menggunakan lima algoritma *supervised learning* berbasis NumPy, mencakup tahapan prapemrosesan data (*cleaning*, *encoding*, *scaling*, penanganan ketidakseimbangan kelas dengan SMOTE, seleksi fitur, dan reduksi dimensi PCA), evaluasi dan validasi terhadap `scikit-learn`, penyimpanan serta pemuatan model (`.pkl`), hingga pembuatan berkas submisi Kaggle (`.csv`).
+
+Algoritma pembelajaran mesin yang diimplementasikan:
+
+- **k-Nearest Neighbors (KNN)**: jarak Minkowski/Euclidean/Manhattan/Hamming berbasis *batch* serta pembobotan *uniform* dan *inverted distance*.
+- **Decision Tree Learning (DTL)**: algoritma **C4.5** (*gain ratio*, atribut numerik dan kategorikal, penanganan *missing values* proporsional, serta visualisasi *top-N* percabangan).
+- **Logistic Regression**: *Maximum Likelihood Estimation* dengan optimasi *Stochastic Gradient Ascent* (SGA) dan *mini-batch Adam*, dilengkapi regularisasi L1, L2, dan Elastic Net.
+- **Support Vector Machine (SVM)**: *soft-margin* SVM dengan solver *Sequential Minimal Optimization* (SMO) orde kedua, kernel *Linear*, *Polynomial*, dan *Gaussian* (RBF), serta visualisasi bidang pemisah 2D.
+- **Bayesian Network (Naive Bayes)**: Naive Bayes kategorikal/Gaussian dengan *Laplace smoothing*, diskritisasi MDL, graf struktur relasi atribut-kelas, serta optimasi *Weighted Naive Bayes*.
+
+### Struktur Repositori
 
 ```text
 IF3170_G06_PhilippsLeatherJacket/
-├── data/                        # Dataset kompetisi (satu-satunya dependensi data)
-│   ├── train.csv
-│   ├── test.csv
-│   └── sample_submission.csv
-├── output/                      # Hasil export model (.pkl) dan file prediksi (.csv)
-├── notebooks/                   # Notebook mandiri (self-contained, hanya butuh data/)
-│   ├── knn.ipynb                # Notebook lengkap KNN (Preprocessing + Modeling + Submission)
-│   ├── dtl_experiment.ipynb     # Notebook eksperimen DTL (C4.5)
-│   └── naive_bayes_experiment.ipynb # Notebook eksperimen Naive Bayes
-├── src/                         # Modul logika utama (terstruktur & modular)
-│   ├── __init__.py
-│   ├── preprocess/              # Pipeline preprocessing modular
-│   │   ├── config.py            # Konfigurasi & konstanta preprocessing
-│   │   ├── missing.py           # Tahap 1: Missing value handling
-│   │   ├── cleaning.py          # Tahap 2: Duplicate & invalid data handling
-│   │   ├── encoding.py          # Tahap 3: Categorical data encoding
-│   │   ├── scaling.py           # Tahap 4: Standardization (StandardScaler)
-│   │   ├── balancing.py         # Tahap 5: Imbalance handling (SMOTE)
-│   │   ├── feature_selection.py # Tahap 6: Feature selection (SelectKBest)
-│   │   ├── reduction.py         # Tahap 7: Dimensionality reduction (PCA)
-│   │   ├── dtl_features.py      # Feature engineering khusus DTL
-│   │   ├── nb_features.py       # Feature engineering khusus Naive Bayes
-│   │   └── preprocess.py        # Orkestrator preprocessing utama
-│   ├── models/                  # Implementasi model-model klasifikasi
-│   │   ├── __init__.py          # Export seluruh model
-│   │   ├── base.py              # Interface BaseModel (fit & predict)
-│   │   ├── knn.py               # Model 1: KNN scratch (weights, distance metrics)
-│   │   ├── dtl.py               # Model 2: Decision Tree Learning (C4.5 scratch)
-│   │   └── naive_bayes.py       # Model 3: Naive Bayes scratch
-│   └── evaluation/              # Utilitas validasi & submisi bersama
-│       ├── __init__.py
-│       ├── validator.py         # Split data, StratifiedKFold, evaluasi metrik
-│       └── submission.py        # Simpan & verifikasi model .pkl, export & validasi file .csv
-├── main.ipynb                   # Notebook utama: EDA, Preprocessing, Pembandingan Semua Model, Submisi Akhir
-├── README.md                    # Dokumentasi repositori
-└── .gitignore
+├── data/                        # Dataset kompetisi (train.csv, test.csv, sample_submission.csv)
+├── docs/
+│   └── laporan/                 # Dokumen laporan LaTeX dan PDF final
+├── notebooks/                   # Notebook eksperimen per algoritma
+│   ├── knn.ipynb
+│   ├── dtl_experiment.ipynb
+│   ├── logistic_regression_experiment.ipynb
+│   ├── svm_experiment.ipynb
+│   └── naive_bayes_experiment.ipynb
+├── output/                      # Model tersimpan (.pkl), visualisasi, dan submisi (.csv)
+├── scripts/
+│   └── naive_bayes/             # Skrip pencarian fitur dan eksperimen Naive Bayes
+├── src/
+│   ├── preprocess/              # Pipeline prapemrosesan data dan rekayasa fitur
+│   ├── models/                  # Kelas KNN, C45DecisionTree, LogisticRegression, NaiveBayes
+│   ├── svm/                     # Paket SVM (kernels, SMO, model, fitur, visualisasi)
+│   └── evaluation/              # Utilitas split validasi, cross-validation, save/load, dan submisi
+├── tests/                       # Unit test SVM, rekayasa fitur, dan checkpoint
+└── main.ipynb                   # Notebook utama integrasi dan perbandingan seluruh model
 ```
 
----
+## Cara Setup & Run
 
-## ⚙️ Setup Environment
+**Prasyarat:** Python 3.10+ dan `pip`.
 
-Sebelum menjalankan kode atau notebook, pastikan virtual environment sudah aktif dan dependensi terpasang:
+```bash
+# 1. Buat dan aktifkan virtual environment
+python3 -m venv .venv
+source .venv/bin/activate          # Windows PowerShell: .\.venv\Scripts\Activate.ps1
 
-```powershell
-# Buat virtual environment (jika belum ada)
-python -m venv .venv
-
-# Aktifkan virtual environment
-# Di Windows PowerShell:
-.\.venv\Scripts\Activate.ps1
-# Di Command Prompt (cmd):
-.\.venv\Scripts\activate.bat
-# Di Linux / macOS:
-source .venv/bin/activate
-
-# Install dependensi yang dibutuhkan
-pip install pandas numpy matplotlib seaborn scikit-learn imbalanced-learn joblib ipykernel
+# 2. Pasang dependensi
+pip install numpy pandas matplotlib seaborn scikit-learn imbalanced-learn joblib ipykernel
 ```
 
-> **Catatan VS Code:** Saat membuka notebook (.ipynb), klik **Select Kernel** di pojok kanan atas, lalu pilih environment Python dari `.venv` (`Python 3.12 (.venv)`).
+### 1. Menjalankan Notebook Utama (`main.ipynb`)
 
----
+Buka `main.ipynb` di Jupyter / VS Code menggunakan kernel `.venv`, lalu jalankan seluruh sel secara berurutan (**Run All**) untuk mengeksekusi EDA, prapemrosesan, pelatihan dan evaluasi kelima model, penyimpanan/pemuatan model, serta reproduksi berkas submisi Kaggle terbaik.
 
-## 🚀 Cara Menjalankan Kode
+### 2. Menjalankan Notebook Eksperimen Per Model (`notebooks/*.ipynb`)
 
-### 1. Menjalankan Notebook Mandiri (`notebooks/*.ipynb`)
-Folder `notebooks/` berisi notebook yang **sepenuhnya independen (self-contained)**.  
-Notebook di folder ini tidak mengimpor apa pun dari `src/` dan hanya membutuhkan dataset dari `data/`. Setiap anggota dapat meletakkan notebook modelnya di sini (misal `notebooks/knn.ipynb`, `notebooks/dtl_experiment.ipynb`, `notebooks/naive_bayes_experiment.ipynb`) dan menjalankannya secara utuh dari awal sampai akhir.
-- Buka notebook (misal `notebooks/knn.ipynb`) di VS Code / Jupyter Notebook.
-- Pastikan kernel yang dipilih adalah `.venv`.
-- Klik **Run All** (seluruh proses: pemuatan data, EDA, preprocessing lengkap, training, evaluasi, hingga penyimpanan model & file submisi akan langsung berjalan).
+Setiap berkas di `notebooks/` memuat eksperimen rinci masing-masing algoritma beserta perbandingan terhadap `scikit-learn`, penyimpanan model `.pkl`, visualisasi bonus, dan pembuatan submisi model terkait:
 
----
+- `notebooks/knn.ipynb`
+- `notebooks/dtl_experiment.ipynb`
+- `notebooks/logistic_regression_experiment.ipynb`
+- `notebooks/svm_experiment.ipynb`
+- `notebooks/naive_bayes_experiment.ipynb`
 
-### 2. Menjalankan Notebook Utama (`main.ipynb`)
-Notebook ini digunakan untuk evaluasi menyeluruh dan laporan perbandingan performa seluruh model secara modular.
-- Buka `main.ipynb` di VS Code / Jupyter Notebook.
-- Pastikan kernel yang dipilih adalah `.venv`.
-- Jalankan cell secara berurutan atau klik **Run All**.
-- Model terbaik akan otomatis tersimpan di folder `output/<nama_model>.pkl` dan prediksinya di `output/submission_<nama_model>.csv`.
+### 3. Menjalankan Pengujian dan Modul lewat Terminal
 
----
+```bash
+# Uji pipeline preprocessing
+python3 src/preprocess/preprocess.py
 
-### 3. Menjalankan Skrip / Modul Python Secara Langsung (CLI)
-Setiap modul di `src/` dilengkapi dengan runnable test / smoke test sederhana, sehingga bisa dites langsung lewat terminal:
+# Smoke test model individual
+python3 src/models/knn.py
+python3 src/models/logistic_regression.py
 
-#### a. Uji Pipeline Preprocessing:
-```powershell
-python src/preprocess/preprocess.py
+# Jalankan seluruh unit test
+python3 -m unittest discover -s tests -v
 ```
 
-#### b. Uji Model Tertentu (Standalone Smoke Test):
-```powershell
-python src/models/knn.py
-```
+## Pembagian Tugas
 
----
-
-## 🛠️ Panduan Menambahkan Model Baru (Untuk Anggota Tim)
-
-Bagi anggota yang membawa model dari branch lain:
-1. **Untuk Notebook Mandiri**:
-   - Taruh notebook lengkap modelmu di dalam folder `notebooks/<nama_model>.ipynb` (pastikan hanya membaca dari `data/` dan dapat dijalankan secara mandiri).
-2. **Untuk Integrasi ke `src/` & `main.ipynb`**:
-   - Buat class model di `src/models/<nama_model>.py` dengan mewarisi `BaseModel` (`from src.models.base import BaseModel`).
-   - Ekspor class dan konfigurasi di `src/models/__init__.py`.
-   - Tambahkan pemanggilan model pada bagian *Model Comparison* di `main.ipynb` menggunakan helper `cross_validate_configs` dan `train_and_evaluate`.
+| Anggota | NIM | Kontribusi |
+|---|---|---|
+| Stevanus Agustaf Wongso | `13524020` | Logistic Regression (SGA, mini-batch Adam, L1/L2/Elastic Net), eksperimen & perbandingan `scikit-learn`, integrasi `main.ipynb`, laporan |
+| Jonathan Kris Wicaksono | `13524023` | Decision Tree Learning (C4.5), penyiapan fitur DTL, visualisasi pohon `top_n`, eksperimen & perbandingan `scikit-learn`, laporan |
+| Made Branenda Jordhy | `13524026` | Naive Bayes & Weighted Naive Bayes, diskritisasi MDL & seleksi fitur, visualisasi graf Naive Bayes, eksperimen & perbandingan `scikit-learn`, laporan |
+| Ray Owen Martin | `13524033` | Pipeline *preprocessing* modular, KNN, utilitas evaluasi & validasi bersama, EDA, laporan |
+| Philipp Hamara | `13524101` | SVM (kernel Linear, Polynomial, Gaussian/RBF & solver SMO), rekayasa fitur & *checkpoint* SVM, visualisasi margin 2D, unit test, laporan |

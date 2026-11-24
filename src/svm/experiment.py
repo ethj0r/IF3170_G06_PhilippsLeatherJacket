@@ -360,14 +360,14 @@ def check_serialization(model, X: np.ndarray) -> bool:
 def save_metrics(
     rows: list[dict],
     subset_indices: np.ndarray,
-    artefacts_dir: str | Path,
+    output_dir: str | Path,
     extra: dict | None = None,
 ) -> tuple[Path, Path]:
-    artefacts_dir = Path(artefacts_dir)
-    artefacts_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     metrics_df = pd.DataFrame(rows)
-    metrics_path = artefacts_dir / "svm_metrics.csv"
+    metrics_path = output_dir / "svm_metrics.csv"
     metrics_df.to_csv(metrics_path, index=False)
 
     timing_payload = {
@@ -388,7 +388,7 @@ def save_metrics(
     }
     if extra:
         timing_payload.update(extra)
-    timing_path = artefacts_dir / "svm_timing.json"
+    timing_path = output_dir / "svm_timing.json"
     timing_path.write_text(json.dumps(timing_payload, indent=2), encoding="utf-8")
     return metrics_path, timing_path
 
