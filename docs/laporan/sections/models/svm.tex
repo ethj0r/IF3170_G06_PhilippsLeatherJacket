@@ -130,7 +130,67 @@ batas $\alpha \in [0,C]$, pemenuhan KKT, penolakan klasifikasi multikelas,
 reproduksibilitas, dan kesamaan prediksi setelah serialisasi. Pengujian juga
 membandingkan hasil dengan \texttt{sklearn.svm.SVC} pada data \textit{blob};
 akurasi keduanya berbeda kurang dari 0,15 dengan kesepakatan tanda prediksi
-di atas 85\%.
+di atas 85\%. Seluruh pengujian dapat dijalankan kembali dengan
+\texttt{python -m unittest tests.test\_svm}.
+
+\subsubsection{Algoritma Optimasi Model (Bonus)}
+
+Algoritma optimasi yang diimplementasikan di luar materi kelas adalah
+\textit{Sequential Minimal Optimization} (SMO) dengan pemilihan
+\textit{working set} orde kedua (\textit{second-order working set selection},
+WSS2) dan \textit{kernel cache} berbasis LRU. Pelatihan SVM pada dasarnya
+adalah masalah pemrograman kuadratik (QP) dengan kendala kotak
+$0 \le \alpha_i \le C$ dan satu kendala kesamaan $\sum_i \alpha_i y_i = 0$.
+Solver QP umum membutuhkan waktu dan memori $O(n^3)$ sehingga tidak praktis
+untuk puluhan ribu baris, sedangkan metode gradien biasa memerlukan proyeksi
+ke daerah layak agar kendala kesamaan tetap terpenuhi.
+
+\paragraph{Cara kerja.}
+SMO memecah QP menjadi submasalah terkecil yang masih dapat diselesaikan
+secara analitik, yaitu dua variabel $\alpha_i$ dan $\alpha_j$. Berdasarkan
+gradien $E_k = f(x_k) - y_k$, $\alpha_j$ diperbarui sepanjang arah turun dan
+dipotong ke interval $[L,H]$ agar kendala kotak dan kesamaan tetap terpenuhi;
+$\alpha_i$ kemudian dihitung dari kendala kesamaan. Nilai \textit{bias} $b$
+dan \textit{error cache} diperbarui agar iterasi berikutnya tidak perlu
+menghitung ulang seluruh fungsi keputusan. Pemilihan pasangan $(i,j)$ memakai
+skor perolehan orde kedua
+$(E_j - E_i)^2/(K_{ii} + K_{jj} - 2K_{ij})$.
+
+\paragraph{Mengapa dapat mengoptimasi model.}
+Setiap langkah SMO menaikkan nilai tujuan dual dan menjaga seluruh kendala
+secara eksak, sehingga solusi selalu layak. Karena QP bersifat konveks, titik
+yang memenuhi KKT merupakan optimum global. Pada WSS2, pembilang skor yang
+besar menandakan selisih gradien besar sehingga masih banyak kemajuan yang
+dapat diperoleh, sedangkan penyebut yang kecil menandakan kedua titik berada
+dekat di ruang fitur sehingga langkah aman dan besar. Kombinasi keduanya
+memberikan penurunan tujuan yang lebih besar per iterasi dan konvergensi lebih
+cepat daripada pemilihan \textit{first-order}/heuristik pada SMO klasik.
+\textit{Kernel cache} LRU mengurangi perhitungan ulang baris kernel yang
+paling sering dipakai, sehingga biaya per iterasi turun tanpa mengubah solusi.
+
+\paragraph{Bukti empiris.}
+Pada perbandingan 5.000 baris, SMO konvergen dalam 2.932--17.031 iterasi
+dengan pelanggaran KKT $\le 10^{-3}$ untuk ketiga kernel, menghasilkan jumlah
+\textit{support vector} yang sama (selisih maksimum satu), dan skor keputusan
+yang berkorelasi $\approx 1{,}0$ dengan scikit-learn. Pada model final 22.000
+baris, solver konvergen dalam 55.082 iterasi dengan KKT
+$9{,}97\times10^{-4}$.
+
+\paragraph{Referensi.}
+\begin{enumerate}
+  \item J. C. Platt, ``Sequential Minimal Optimization: A Fast Algorithm for
+        Training Support Vector Machines,'' Technical Report MSR-TR-98-14,
+        Microsoft Research, 1998.
+  \item R.-E. Fan, P.-H. Chen, and C.-J. Lin, ``Working Set Selection Using
+        Second Order Information for Training Support Vector Machines,''
+        \textit{Journal of Machine Learning Research}, vol. 6,
+        pp. 1889--1918, 2005.
+  \item C. Cortes and V. Vapnik, ``Support-Vector Networks,''
+        \textit{Machine Learning}, vol. 20, no. 3, pp. 273--297, 1995.
+  \item F. Pedregosa et al., ``Scikit-learn: Machine Learning in Python,''
+        \textit{Journal of Machine Learning Research}, vol. 12,
+        pp. 2825--2830, 2011.
+\end{enumerate}
 
 \subsubsection{Hasil dan Perbandingan dengan scikit-learn}
 
@@ -181,12 +241,14 @@ polinomial derajat tiga dengan $\gamma=$ \texttt{scale} pada data ini lebih
 sulit dikalibrasi. Pemilihan kernel RBF konsisten dengan hasil eksperimen
 lanjutan.
 
-Gambar~\ref{fig:svm-margin} memperlihatkan ilustrasi batas keputusan dan
-\textit{margin} pada dua komponen utama pertama. Ilustrasi ini hanya bertujuan
-visual: model pada gambar dilatih pada bidang 2D, bukan model 9--116 dimensi
-yang dipakai untuk submisi. Terlihat bahwa kernel linear menghasilkan batas
-berupa garis lurus, sedangkan kernel RBF mampu membentuk batas melengkung dan
-mengelilingi awan data dengan lebih baik.
+Gambar~\ref{fig:svm-margin} menampilkan bidang pemisah ($f(x)=0$),
+\textit{margin} ($f(x)=\pm 1$), dan \textit{support vector} untuk ketiga
+kernel pada hasil reduksi dimensi PCA ke dua komponen utama pertama.
+Ilustrasi ini hanya bertujuan visual: model pada gambar dilatih pada bidang
+2D, bukan model 9--116 dimensi yang dipakai untuk submisi. Terlihat bahwa
+kernel linear menghasilkan batas berupa garis lurus, sedangkan kernel
+Gaussian (RBF) mampu membentuk batas melengkung dan mengelilingi awan data
+dengan lebih baik.
 
 \begin{figure}[htbp]
   \centering
@@ -203,10 +265,11 @@ mengelilingi awan data dengan lebih baik.
   \begin{minipage}{0.32\textwidth}
     \centering
     \includegraphics[width=\linewidth]{assets/svm/svm-margin-rbf.png}\\
-    (c) RBF
+    (c) Gaussian (RBF)
   \end{minipage}
-  \caption{Ilustrasi batas keputusan dan \textit{margin} SVM pada dua komponen
-  utama pertama. Garis hitam adalah $f(x)=0$, garis putus-putus adalah
+  \caption{Ilustrasi bidang pemisah dan \textit{margin} SVM untuk kernel
+  Linear, Polynomial, dan Gaussian (RBF) pada dua komponen utama pertama.
+  Garis hitam adalah $f(x)=0$, garis putus-putus adalah
   \textit{margin} $f(x)=\pm 1$, dan lingkaran hitam menandai \textit{support
   vector}.}
   \label{fig:svm-margin}
@@ -275,15 +338,15 @@ varian tersebut hanya dipakai sebagai eksperimen, bukan submisi SVM murni.
 \end{table}
 
 \paragraph{Reproduksibilitas.}
-Seluruh eksperimen dapat dijalankan ulang melalui
-\texttt{scripts/run\_svm\_experiments.py} (perbandingan tiga kernel),
-\texttt{scripts/train\_final\_scratch.py} (model murni SVM),
-\texttt{scripts/train\_final\_compliant\_svm.py} (varian \textit{compliant}),
-dan \texttt{scripts/train\_single\_knn\_svm.py} (varian fitur KNN). Metrik
-mentah tersimpan pada \texttt{artefacts/svm\_metrics.csv},
-\texttt{artefacts/svm\_timing.json}, \texttt{artefacts/scratch\_final\_15k/metrics.json},
-dan \texttt{artefacts/compliant\_svm/metrics.json}, sedangkan model serta berkas
-submisi tersimpan pada direktori \texttt{output/}.
+Seluruh eksperimen dapat dijalankan ulang melalui empat skrip utama:
+\texttt{scripts/run\_svm\_experiments.py} untuk perbandingan tiga kernel,
+\texttt{scripts/train\_final\_scratch.py} untuk model murni SVM,
+\texttt{scripts/train\_final\_compliant\_svm.py} untuk varian \textit{compliant},
+dan \texttt{scripts/train\_single\_knn\_svm.py} untuk varian fitur KNN. Setiap
+skrip mencetak metrik validasi dan waktu latih ke keluaran standar, lalu
+menuliskan model serta berkas submisi ke direktori \texttt{output/}. Pengujian
+unit untuk kernel, solver, dan serialisasi dapat dijalankan dengan
+\texttt{python -m unittest tests.test\_svm}.
 
 \paragraph{Analisis beban komputasi.}
 Kompleksitas waktu SVM bergantung pada jumlah baris latih $n$ dan jumlah

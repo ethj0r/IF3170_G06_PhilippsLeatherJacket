@@ -1,7 +1,365 @@
+\clearpage
 \subsection{Bayesian Network (Naive Bayes)}
+\sloppy
+
+\subsubsection{Landasan Teori}
+Naive Bayes adalah Bayesian Network khusus dengan variabel kelas $V$ sebagai
+\textit{parent} dari setiap atribut $A_1,\dots,A_n$ dan tidak ada edge antaratribut.
+Dengan struktur ini, distribusi gabungannya menjadi
+\[
+  P(V, A_1, \dots, A_n) = P(V)\prod_{i=1}^{n} P(A_i \mid V),
+\]
+karena setiap atribut diasumsikan \textit{conditionally independent} terhadap atribut
+lain jika kelasnya diketahui. Klasifikasi dilakukan dengan \textit{Maximum A Posteriori}
+(MAP). Penyebut $P(a_1,\dots,a_n)$ sama untuk semua kelas sehingga dapat diabaikan:
+\[
+  v_{MAP} = \arg\max_{v_j \in \{0,1\}} P(v_j)\prod_{i=1}^{n} P(a_i \mid v_j).
+\]
+Parameter model diestimasi dengan menghitung frekuensi pada data latih, yaitu
+$P(v_j) = \#(v_j)/k$ dengan $k$ jumlah data, serta $P(a_i \mid v_j)$ dari
+$\#(a_i, v_j)$ dan $\#(v_j)$. Agar tidak ada probabilitas bernilai nol, digunakan
+Laplace smoothing seperti pada materi kuliah:
+\[
+  P(a_i \mid v_j) = \frac{\#(a_i, v_j) + \alpha}{\#(v_j) + \alpha\,(K_i + 1)},
+\]
+dengan $K_i$ banyak nilai atribut $A_i$ yang muncul di data latih. Nilai
+$\alpha = 1$ sama dengan Laplace smoothing pada materi kuliah, sedangkan
+$\alpha \neq 1$ merupakan perumuman Lidstone yang juga dipakai
+\texttt{CategoricalNB} (Pedregosa dkk., 2011). Penyebutnya memakai $K_i + 1$ karena
+implementasi menyiapkan satu slot tambahan untuk nilai yang tidak pernah muncul
+di data latih. Dengan slot ini, nilai baru pada data uji tetap mendapat probabilitas
+positif. Prior kelas tidak diberi smoothing (opsi $9/14$ pada contoh
+\textit{Play Tennis} di materi kuliah) karena kedua kelas memiliki ribuan data.
 
 \subsubsection{Implementasi}
-% Jelaskan fungsi atau kelas utama dan sertakan cuplikan kode.
+Implementasi terdapat pada \texttt{src/models/naive\_bayes.py} dan
+\texttt{src/preprocess/nb\_features.py}. Seluruh perhitungan model hanya
+menggunakan NumPy. Notebook utama Naive Bayes adalah
+\texttt{notebooks/naive\_bayes\_experiment.ipynb}. Notebook ini memuat seluruh
+eksperimen, perbandingan dengan scikit-learn, kedua bonus, dan pembuatan file
+submisi. Semua angka dan gambar pada bagian ini berasal dari notebook tersebut, dan
+menjalankannya ulang menghasilkan file submisi yang identik.
+
+\paragraph{Kelas \texttt{NaiveBayes}.}
+Metode \texttt{fit} menghitung log prior kelas dan tabel
+$\log P(a_i \mid v_j)$ untuk setiap atribut kategorikal. Setiap nilai atribut
+dipetakan ke indeks, lalu frekuensinya per kelas dihitung dengan
+\texttt{np.bincount}. Kelas ini juga mendukung atribut numerik dengan distribusi
+Gaussian. Mode tersebut hanya dipakai untuk pengecekan terhadap
+\texttt{GaussianNB} karena seluruh atribut pada model akhir sudah didiskritisasi.
+\begin{lstlisting}
+counts = np.array([np.sum(y == c) for c in self.classes_], dtype=float)
+self.class_log_prior_ = np.log(counts / counts.sum())
+...
+for j in self.cat_:
+    values = sorted({v for v in X[:, j] if not is_missing(v)}, key=str)
+    self.value_index_[j] = {v: i for i, v in enumerate(values)}
+    codes = self._encode(X[:, j], j)
+    n_values = len(values) + 1
+    table = np.zeros((n_classes, n_values))
+    for k, c in enumerate(self.classes_):
+        known = codes[(y == c) & (codes >= 0)]
+        freq = np.bincount(known, minlength=n_values).astype(float)
+        table[k] = np.log((freq + self.alpha) / (len(known) + self.alpha * n_values))
+    self.feature_log_prob_[j] = table
+\end{lstlisting}
+
+Prediksi dilakukan dalam ruang log, yaitu
+$\log P(v_j) + \sum_i \log P(a_i \mid v_j)$. Model akhir mengalikan lebih dari
+seribu probabilitas, sehingga perkalian langsung akan \textit{underflow} menjadi nol
+untuk kedua kelas. Kondisi ini mirip contoh MAP tanpa smoothing pada materi kuliah,
+ketika kedua kelas sama-sama bernilai nol. Atribut yang bernilai kosong dilewati.
+Hal ini sama dengan contoh klasifikasi ikan pada materi kuliah: variabel yang tidak
+diketahui dimarginalkan, dan karena $\sum_{a} P(a \mid v_j) = 1$, faktornya hilang
+dari perhitungan.
+\begin{lstlisting}
+def _joint_log_likelihood(self, X):
+    jll = np.tile(self.class_log_prior_, (X.shape[0], 1))
+    ...
+    for j in self.cat_:
+        codes = self._encode(X[:, j], j)
+        known = codes >= 0
+        jll[known] += self.feature_log_prob_[j][:, codes[known]].T
+    return jll
+
+def predict(self, X):
+    return self.classes_[np.argmax(self._joint_log_likelihood(X), axis=1)]
+\end{lstlisting}
+Metode \texttt{predict\_proba} menormalisasi hasil tersebut dengan
+\textit{log-sum-exp}. Model disimpan dan dimuat dengan \texttt{save} dan
+\texttt{load} berbasis \texttt{joblib}. Notebook Naive Bayes memastikan prediksi
+model hasil \texttt{load} identik dengan model sebelum disimpan.
+
+\paragraph{Kelas \texttt{WeightedNaiveBayes} dan \texttt{WideNaiveBayes}.}
+\texttt{WeightedNaiveBayes} adalah turunan \texttt{NaiveBayes} yang menambahkan
+bobot pada setiap atribut. Kelas ini dibahas pada bagian bonus optimasi.
+\texttt{WideNaiveBayes} membungkus pembuatan fitur \texttt{WideFeatures} dan
+\texttt{WeightedNaiveBayes} dalam satu objek agar dapat dipakai pada
+\texttt{main.ipynb} dengan antarmuka yang sama seperti model lain.
+
+\subsubsection{Preprocessing Khusus Naive Bayes}
+Naive Bayes tidak memakai hasil preprocessing bersama (one-hot, scaling, SMOTE,
+dan PCA). Sebagai pengecekan, \texttt{NaiveBayes} mode Gaussian dan
+\texttt{GaussianNB} dilatih pada fitur PCA tersebut. Hasil keduanya identik,
+dengan selisih probabilitas maksimum $6{,}88\times10^{-15}$, tetapi akurasinya
+hanya 0,5043 dan macro F1 0,4976. Komponen PCA merupakan kombinasi linear dari
+fitur one-hot sehingga distribusinya jauh dari normal, sedangkan SMOTE menggeser
+prior kelas. Karena itu Naive Bayes memakai pipeline sendiri yang tetap melalui
+keempat tahap preprocessing pada spesifikasi.
+Fungsi \texttt{prepare\_nb\_features} hanya mengolah data per baris, sedangkan
+tahap yang belajar dari data (batas bin dan pembentukan fitur) di-\texttt{fit}
+pada data latih lalu diterapkan ke data uji. Dengan demikian, data latih dan data
+uji tidak pernah digabung.
+
+\begingroup
+\renewcommand{\arraystretch}{1.3}
+\noindent\begin{tabularx}{\textwidth}{@{}lX@{}}
+  \toprule
+  \textbf{Tahap} & \textbf{Penanganan pada Naive Bayes} \\
+  \midrule
+  Cleaning &
+  Nilai kosong (2,96--11,09\% pada delapan kolom) tidak diisi, tetapi dijadikan
+  kategori \texttt{missing} dan diberi penanda \texttt{*\_missing}. Pola kosongnya
+  ternyata informatif, terlihat dari bobot besar fitur penanda pada
+  Gambar~\ref{fig:nb-weights}. Nilai \texttt{num\_adults} $=0$ (106 baris) dianggap
+  tidak valid dan diubah menjadi kosong. Nilai ekstrem jumlah anak dan malam
+  dipotong (\textit{clip}). Terdapat 64 baris duplikat (0,23\%) yang tidak dibuang
+  karena hanya sedikit menggeser frekuensi. \\
+  Transformasi &
+  Kategori dipetakan ke indeks. Atribut numerik didiskritisasi dengan MDL dan bin
+  kuantil. Tanggal diubah menjadi hari, bulan, dan nomor hari. Tidak dilakukan
+  scaling karena Naive Bayes kategorikal hanya menghitung frekuensi. Tidak dilakukan
+  SMOTE karena ketidakseimbangan kelas (32,8\% batal) sudah tercermin pada prior
+  $P(v_j)$. \\
+  Seleksi fitur &
+  \textit{Forward selection} untuk Naive Bayes biasa dan pembobotan atribut untuk
+  Weighted Naive Bayes. \\
+  Reduksi dimensi &
+  Tidak memakai PCA karena hasilnya buruk untuk Naive Bayes, seperti dijelaskan di
+  atas. Diskritisasi dan seleksi fitur sudah membatasi jumlah nilai per atribut. \\
+  \bottomrule
+\end{tabularx}
+\endgroup
+
+\paragraph{Diskritisasi MDL.}
+Atribut kontinu (\texttt{lead}, \texttt{price}, \texttt{nights},
+\texttt{arrival\_date}, dan \texttt{booking\_date}) dibagi menjadi beberapa bin.
+Caranya mengikuti penanganan \textit{continuous-valued attribute} pada materi DTL.
+Data diurutkan, kandidat batas diambil di titik tengah dua nilai yang berbeda, lalu
+dipilih batas dengan Gain berbasis entropi terbesar. Proses ini diulang secara
+rekursif pada setiap sisi. Pemecahan berhenti jika Gain tidak melewati batas
+\textit{Minimum Description Length} (Fayyad \& Irani, 1993):
+\[
+  \mathrm{Gain}(S, T) \le \frac{\log_2(N-1)}{N} + \frac{\Delta(S, T)}{N},
+\]
+dengan $N$ jumlah data pada $S$ dan
+$\Delta = \log_2(3^{c}-2) - [c\,\mathrm{Ent}(S) - c_1\,\mathrm{Ent}(S_1) - c_2\,\mathrm{Ent}(S_2)]$,
+di mana $c$, $c_1$, dan $c_2$ adalah banyak kelas pada $S$ dan kedua
+pecahannya. Hasilnya adalah 9 bin untuk \texttt{lead}, 9 untuk \texttt{price},
+4 untuk \texttt{nights}, 17 untuk \texttt{arrival\_date}, dan 11 untuk
+\texttt{booking\_date}.
+\begin{lstlisting}
+boundary = np.nonzero(v[1:] != v[:-1])[0]
+left = np.cumsum(onehot, axis=0)[boundary]
+right = total - left
+n_left = left.sum(axis=1)
+weighted = (n_left * row_entropy(left) + (n - n_left) * row_entropy(right)) / n
+best = np.argmin(weighted)
+...
+gain = ent - weighted[best]
+delta = np.log2(3 ** k_all - 2) - (k_all * ent - k_left * ent_left - k_right * ent_right)
+if gain <= (np.log2(n - 1) + delta) / n:
+    return
+cuts.append((v[k] + v[k + 1]) / 2)
+\end{lstlisting}
+
+\paragraph{Fitur gabungan dan forward selection.}
+Asumsi independensi bersyarat tidak selalu berlaku. Contohnya, pengaruh
+\texttt{lead} terhadap pembatalan bergantung pada \texttt{arrival\_date}. Pada
+materi pembangunan struktur dari data, hal ini sama dengan kondisi
+$P(A \mid B, V) \neq P(A \mid V)$. Untuk menangkap dependensi tersebut, dua atribut
+digabung menjadi satu atribut baru yang nilainya adalah pasangan nilai keduanya,
+misalnya \texttt{lead*arrival\_date}. Pemilihan atribut mengikuti langkah
+``tambahkan $X_i$'' pada konstruksi struktur Bayesian Network. Mulai dari himpunan
+kosong, setiap langkah menambahkan atribut tunggal atau gabungan yang paling
+menaikkan akurasi \textit{stratified} 5-fold CV, dan proses berhenti jika akurasi
+tidak naik lagi. Dari 21 atribut tunggal dan 153 atribut gabungan, terpilih enam
+atribut (Gambar~\ref{fig:nb-forward}). Akurasi CV naik dari 0,7397 (semua atribut
+tunggal) menjadi 0,8261.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{assets/nb/forward_selection.png}
+  \caption{Akurasi CV pada setiap langkah \textit{forward selection}.}
+  \label{fig:nb-forward}
+\end{figure}
 
 \subsubsection{Hasil dan Perbandingan dengan scikit-learn}
-% Sertakan metrik, visualisasi, dan analisis.
+Data latih (27.373 baris) dibagi secara \textit{stratified} menjadi 80\% latih
+(21.898 baris) dan 20\% validasi (5.475 baris). Seleksi fitur dan tuning
+dilakukan dengan 5-fold CV pada bagian latih. Nilai smoothing dipilih dari
+$\alpha \in \{0{,}5;\ 1;\ 2\}$ dengan akurasi CV 0,8253, 0,8261, dan 0,8258,
+sehingga terpilih $\alpha = 1$, yaitu Laplace smoothing pada materi kuliah.
+Pembanding scikit-learn adalah \texttt{CategoricalNB(alpha=1)} pada fitur yang
+sama. Fitur di-encode dengan \texttt{OrdinalEncoder}, dan nilai yang tidak
+dikenal diberi satu kode tambahan agar setara dengan slot \textit{unseen}.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccccc@{}}
+  \toprule
+  \textbf{Model} & \textbf{Akurasi} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 (batal)} & \textbf{Macro F1} \\
+  \midrule
+  Naive Bayes (scratch) & 0,8228 & 0,7302 & 0,7285 & 0,7294 & 0,7988 \\
+  \texttt{CategoricalNB} & 0,8228 & 0,7302 & 0,7285 & 0,7294 & 0,7988 \\
+  \midrule
+  Gaussian NB (scratch, fitur PCA) & 0,5043 & -- & -- & -- & 0,4976 \\
+  \texttt{GaussianNB} (fitur PCA) & 0,5043 & -- & -- & -- & 0,4976 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Prediksi implementasi scratch dan \texttt{CategoricalNB} sama 100\% pada data
+validasi (Gambar~\ref{fig:nb-confusion}). Hal ini menunjukkan bahwa perhitungan
+frekuensi, smoothing, dan MAP pada implementasi sudah benar. Precision dan recall
+kelas batal hampir seimbang (0,73), sedangkan kelas tidak batal sebagai kelas mayoritas
+mencapai F1 0,8683.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.75\textwidth]{assets/nb/confusion_nb.png}
+  \caption{Confusion matrix Naive Bayes scratch dan \texttt{CategoricalNB} pada data validasi.}
+  \label{fig:nb-confusion}
+\end{figure}
+
+\subsubsection{Bonus: Graf Naive Bayes}
+Gambar~\ref{fig:nb-graph} menampilkan struktur model dengan bentuk yang sama seperti
+gambar Naive Bayes pada materi kuliah. Variabel kelas \texttt{is\_canceled} menjadi
+\textit{parent} dari keenam atribut terpilih, dan setiap edge mewakili tabel
+$P(a_i \mid v_j)$. Graf ini menampilkan dua jenis hubungan:
+\begin{itemize}
+  \item \textbf{Kelas--atribut} (panah biru): tebal panah sebanding dengan
+  \textit{mutual information} yang dihitung dari tabel probabilitas model,
+  \[
+    I(A_i; V) = \sum_{v_j}\sum_{a} P(v_j)\,P(a \mid v_j)\log\frac{P(a \mid v_j)}{P(a)}.
+  \]
+  Atribut \texttt{lead*arrival\_date} paling informatif (0,147), sedangkan
+  \texttt{children} paling lemah (0,001).
+  \item \textbf{Antaratribut} (garis putus-putus): atribut gabungan dihubungkan ke
+  atribut asalnya. Garis ini menunjukkan dependensi yang tidak dapat dimodelkan oleh
+  Naive Bayes murni sehingga perlu digabung. Contohnya, \texttt{channel} terlibat
+  dalam tiga atribut gabungan.
+\end{itemize}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{assets/nb/nb_graph.png}
+  \caption{Graf Naive Bayes: hubungan kelas dengan atribut serta antaratribut.}
+  \label{fig:nb-graph}
+\end{figure}
+
+\subsubsection{Bonus: Optimasi dengan Weighted Naive Bayes}
+Forward selection berhenti pada enam atribut karena Naive Bayes tidak dapat
+menangani atribut yang redundan. Atribut yang saling berkorelasi ikut dikalikan
+seolah-olah independen sehingga buktinya terhitung berkali-kali. Jika semua 1.239
+atribut \texttt{WideFeatures} dipakai sekaligus, akurasi justru turun dari 0,8228
+menjadi 0,7700. Weighted Naive Bayes (Zaidi dkk., 2013) mengatasi masalah ini.
+
+\paragraph{Cara kerja.}
+Untuk dua kelas, aturan MAP dapat ditulis dalam bentuk log-odds:
+\[
+  \log\frac{P(v_1 \mid \mathbf{a})}{P(v_0 \mid \mathbf{a})}
+  = \log\frac{P(v_1)}{P(v_0)} + \sum_{i} \log\frac{P(a_i \mid v_1)}{P(a_i \mid v_0)}.
+\]
+Weighted Naive Bayes mengganti prior dengan bias $b$ dan memberi bobot $w_i$ pada
+setiap atribut:
+\[
+  \log\frac{P(v_1 \mid \mathbf{a})}{P(v_0 \mid \mathbf{a})}
+  = b + \sum_{i} w_i\, r_i,\qquad r_i = \log\frac{P(a_i \mid v_1)}{P(a_i \mid v_0)}.
+\]
+Tabel $P(a_i \mid v_j)$ tetap dihitung dengan frekuensi dan Laplace smoothing
+seperti Naive Bayes biasa. Jika $w_i = 1$ untuk semua atribut dan
+$b = \log P(v_1)/P(v_0)$, model kembali persis menjadi Naive Bayes biasa. Bobot
+dan bias dipelajari dengan meminimalkan log-loss yang diberi regularisasi L2,
+\[
+  L(b, \mathbf{w}) = -\sum_{k}\bigl[t_k\log p_k + (1-t_k)\log(1-p_k)\bigr] + \frac{\lambda}{2}\lVert\mathbf{w}\rVert^2,
+\]
+dengan $p_k = \sigma(b + \mathbf{w}^\top\mathbf{r}_k)$. Minimisasi dilakukan dengan
+metode Newton, $\theta \leftarrow \theta - H^{-1}\nabla L$. Atribut yang redundan
+otomatis mendapat bobot kecil, sehingga ribuan atribut gabungan dapat dipakai
+tanpa menghitung bukti yang sama berulang kali. Agar bobot tidak terlalu
+mempercayai atribut yang jarang muncul, $r_i$ untuk melatih bobot dihitung secara
+\textit{out-of-fold}: rasio untuk setiap baris diambil dari tabel yang dilatih pada
+empat fold lainnya.
+\begin{lstlisting}
+def _fit_weights(self, ratio, target):
+    A = np.hstack([np.ones((len(ratio), 1)), ratio])
+    w = np.zeros(A.shape[1])
+    penalty = self.l2 * np.eye(A.shape[1])
+    penalty[0, 0] = 0.0
+    for _ in range(self.max_iter):
+        p = 1.0 / (1.0 + np.exp(-np.clip(A @ w, -500, 500)))
+        grad = A.T @ (p - target) + penalty @ w
+        hessian = (A * (p * (1 - p))[:, None]).T @ A + penalty
+        step = np.linalg.solve(hessian, grad)
+        w -= step
+        if np.abs(step).max() < self.tol:
+            break
+    return w[0], w[1:]
+\end{lstlisting}
+
+\paragraph{Fitur.}
+\texttt{WideFeatures} berisi atribut tunggal (bin MDL, bin kuantil 10 dan 40, serta
+penanda kosong), semua pasangan dua atribut, gabungan tiga atribut dari 16 atribut
+utama, dan gabungan empat atribut dari 8 atribut utama, dengan total 1.239 atribut.
+Hyperparameter $\alpha = 0{,}3$ dan $\lambda = 10$ dipilih dengan 5-fold CV.
+
+\paragraph{Hasil.}
+Pada data validasi yang sama, Weighted Naive Bayes menaikkan akurasi dari 0,8228
+menjadi 0,8614 dan macro F1 dari 0,7988 menjadi 0,8411. scikit-learn tidak
+memiliki Weighted Naive Bayes, sehingga pembandingnya adalah Naive Bayes biasa
+pada fitur yang sama.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccccc@{}}
+  \toprule
+  \textbf{Model} & \textbf{Akurasi} & \textbf{Precision} & \textbf{Recall} & \textbf{F1 (batal)} & \textbf{Macro F1} \\
+  \midrule
+  NB, 6 atribut terpilih & 0,8228 & 0,7302 & 0,7285 & 0,7294 & 0,7988 \\
+  NB, 1.239 atribut & 0,7700 & 0,6116 & 0,8172 & 0,6996 & 0,7567 \\
+  Weighted NB, 1.239 atribut & \textbf{0,8614} & \textbf{0,8000} & 0,7692 & \textbf{0,7843} & \textbf{0,8411} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Naive Bayes biasa dengan 1.239 atribut memiliki recall tinggi tetapi precision
+rendah. Bukti dari atribut yang berkorelasi terhitung berulang kali sehingga model
+terlalu yakin. Gambar~\ref{fig:nb-weights} memperlihatkan bahwa bobot hasil
+pelatihan jauh dari 1 (rata-rata $-0{,}0006$), dan sebagian bobot bernilai negatif.
+Artinya, informasi atribut tersebut sudah diwakili atribut lain sehingga
+pengaruhnya dikoreksi. Model akhir dilatih ulang pada seluruh data latih dan
+menghasilkan \texttt{output/submission\_wnb.csv} dengan public score 0,85167.
+Model ini merupakan submisi Naive Bayes yang sesuai spesifikasi. Untuk perbandingan
+antarmodel, \texttt{main.ipynb} memakai kelas \texttt{WideNaiveBayes} yang sama
+pada split 85/15 milik pipeline bersama. Pada split tersebut, CV memilih
+$\lambda = 30$ dengan akurasi validasi 0,8624. Selisih ini hanya berasal dari
+pembagian data yang berbeda.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{assets/nb/wnb_weights.png}
+  \caption{Lima belas bobot atribut terbesar dan confusion matrix Weighted Naive Bayes pada data validasi.}
+  \label{fig:nb-weights}
+\end{figure}
+
+\subsubsection{Eksperimen Tambahan di Luar Spesifikasi}
+Sebagai eksperimen, Naive Bayes juga diuji dengan atribut tambahan berupa indeks
+daun dari model gradient boosting dan imputasi nilai kosong yang memakai data latih
+dan data uji sekaligus. Hasil terbaiknya, stacking 32 model Weighted Naive Bayes,
+mencapai akurasi CV 0,8779 dan public score 0,87351. Pendekatan ini tidak dipakai
+untuk submisi karena melanggar tiga ketentuan spesifikasi: memakai ensemble,
+memakai library di luar perhitungan matematika, dan menggabungkan data latih dengan
+data uji saat preprocessing. Hasil ini menunjukkan bahwa atribut yang lebih kaya
+masih dapat menaikkan performa Naive Bayes.
+\fussy

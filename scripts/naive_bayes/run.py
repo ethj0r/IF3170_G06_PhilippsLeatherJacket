@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 
 from src.preprocess.nb_features import NBFeatures, prepare_nb_features as prepare
-from experiments.naive_bayes.search import cv_score, forward_selection, make_folds
+from scripts.naive_bayes.search import cv_score, forward_selection, make_folds
 from src.models.naive_bayes import NaiveBayes
 
 RANDOM_STATE = 824
