@@ -129,6 +129,14 @@ class NaiveBayes(BaseModel):
 
 
 class WeightedNaiveBayes(NaiveBayes):
+    """Discriminatively weighted Naive Bayes using out-of-fold log-odds ratios.
+
+    Reference:
+    - N. A. Zaidi, J. Cerquides, M. J. Carman, and G. I. Webb (2013),
+      Alleviating Naive Bayes Attribute Independence Assumption by Attribute Weighting,
+      JMLR 14:1947-1988.
+    """
+
     def __init__(self, categorical_features=None, alpha=1.0, var_smoothing=1e-9,
                  l2=1.0, n_folds=5, max_iter=50, tol=1e-8, random_state=None):
         super().__init__(categorical_features, alpha, var_smoothing)

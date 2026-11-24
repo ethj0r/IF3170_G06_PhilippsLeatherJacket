@@ -89,6 +89,12 @@ def row_entropy(counts):
 
 
 def mdl_split(v, t, cuts):
+    """Recursive minimum description length (MDL) entropy discretization.
+
+    Reference:
+    - U. M. Fayyad and K. B. Irani (1993), Multi-Interval Discretization of
+      Continuous-Valued Attributes for Classification Learning, IJCAI, pp. 1022-1027.
+    """
     n = len(v)
     onehot = np.column_stack([t == 0, t == 1]).astype(float)
     total = onehot.sum(axis=0)
